@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Deposit Register 🧾</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Security Deposit Register 🧾</h1>
+            <p>Comprehensive Management System</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="openTab('agency-database')">Agency Database</button>
+            <button class="tab" onclick="openTab('record-deposits')">Record Deposits</button>
+            <button class="tab" onclick="openTab('record-payments')">Record Payments</button>
+            <button class="tab" onclick="openTab('view-records')">View Records</button>
+            <button class="tab" onclick="openTab('reports')">Reports</button>
+        </div>
+
+        <!-- Agency Database Tab -->
+        <div id="agency-database" class="tab-content active">
+            <div class="form-section">
+                <h3>Agency/Company Database Management</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="agency-pan">PAN Number</label>
+                        <input type="text" id="agency-pan" placeholder="Enter PAN Number (Format: ABCDE1234F)" maxlength="10" style="text-transform: uppercase;" oninput="formatPAN(this)">
+                        <small style="color: #6c757d; font-size: 0.875rem; margin-top: 3px; display: block;">
+                            Standard Format: ABCDE1234F (5 letters + 4 digits + 1 letter)
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label for="agency-name">Agency/Company Name</label>
+                        <input type="text" id="agency-name" placeholder="Enter Agency/Company Name">
+                    </div>
+                </div>
+                <button class="btn" onclick="saveAgency()">Save Agency</button>
+                <button class="btn btn-secondary" onclick="clearAgencyForm()">Clear</button>
+            </div>
+
+            <div class="search-container">
+                <input type="text" id="agency-search" placeholder="Search agencies..." onkeyup="searchAgencies()">
+            </div>
+
+            <div class="table-container">
+                <table id="agency-table">
+                    <thead>
+                        <tr>
+                            <th>Sl. No.</th>
+                            <th>PAN Number</th>
+                            <th>Agency/Company Name</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="agency-tbody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Record Deposits Tab -->
+        <div id="record-deposits" class="tab-content">
+            <div class="form-section">
+                <h3>Section 1: Agency/Company Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-pan">PAN Number</label>
+                        <select id="deposit-pan" onchange="updateDepositAgencyName()">
+                            <option value="">Select PAN</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="deposit-agency-name">Agency/Company Name</label>
+                        <input type="text" id="deposit-agency-name" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 2: Tender Details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-tender-no">Tender Number</label>
+                        <input type="text" id="deposit-tender-no" placeholder="Enter Tender Number">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 3: Deposit Details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-nature">Nature of Deposit</label>
+                        <select id="deposit-nature" onchange="toggleDepositFields()">
+                            <option value="">Select Nature</option>
+                            <option value="EMD">EMD</option>
+                            <option value="SD">SD</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-bill-no">Bill No.</label>
+                        <input type="text" id="deposit-bill-no" placeholder="Enter Bill Number">
+                    </div>
+                    <div class="form-group">
+                        <label for="deposit-bill-date">Bill Date</label>
+                        <input type="date" id="deposit-bill-date">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="work-completed">Is the work completed?</label>
+                        <select id="work-completed" onchange="toggleWorkCompletionFields()">
+                            <option value="">Select Option</option>
+                            <option value="YES">YES</option>
+                            <option value="NO">NO</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="bill-type-group" style="display: none;">
+                        <label for="bill-type">Bill Type</label>
+                        <input type="text" id="bill-type" placeholder="Enter Bill Type">
+                    </div>
+                </div>
+
+                <div id="emd-fields" class="hidden">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="emd-source">Source of EMD Deposit</label>
+                            <input type="text" id="emd-source" placeholder="Enter EMD Source">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sd-fields" class="hidden">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sd-completion-date">Date of Completion of Work</label>
+                            <input type="date" id="sd-completion-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="sd-defect-period">Defect Liability Period</label>
+                            <input type="text" id="sd-defect-period" placeholder="Enter Defect Liability Period">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 4: Treasury Info</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-tv-no">TV Number</label>
+                        <input type="text" id="deposit-tv-no" placeholder="Enter TV Number">
+                    </div>
+                    <div class="form-group">
+                        <label for="deposit-tv-date">TV Date</label>
+                        <input type="date" id="deposit-tv-date">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-credit-amount">Credit Amount</label>
+                        <input type="number" id="deposit-credit-amount" placeholder="Enter Credit Amount">
+                    </div>
+                    <div class="form-group">
+                        <label for="deposit-challan-no">Treasury Challan Number</label>
+                        <input type="text" id="deposit-challan-no" placeholder="Enter Challan Number">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deposit-challan-date">Challan Date</label>
+                        <input type="date" id="deposit-challan-date">
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" onclick="saveDeposit()">Save Deposit</button>
+            <button class="btn btn-secondary" onclick="clearDepositForm()">Clear Form</button>
+        </div>
+
+        <!-- Record Payments Tab -->
+        <div id="record-payments" class="tab-content">
+            <div class="form-section">
+                <h3>Section 1: Agency/Company Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="payment-pan">PAN Number</label>
+                        <select id="payment-pan" onchange="updatePaymentAgencyName()">
+                            <option value="">Select PAN</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="payment-agency-name">Agency/Company Name</label>
+                        <input type="text" id="payment-agency-name" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 2: Tender Details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="payment-tender-no">Tender Number</label>
+                        <select id="payment-tender-no" onchange="loadExistingChallans()">
+                            <option value="">Select Tender Number</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 3: Treasury Info</h3>
+                
+                <!-- Available Challans Section -->
+                <div id="available-challans-section" class="hidden">
+                    <div class="multi-challan">
+                        <h4>Available Treasury Challans for Selected Tender</h4>
+                        <p>Select the challans you want to include in this payment:</p>
+                        <div id="available-challans-list"></div>
+                        <button class="btn btn-success" onclick="addSelectedChallans()">Add Selected Challans</button>
+                        <button class="btn btn-secondary" onclick="hideAvailableChallans()">Manual Entry</button>
+                    </div>
+                </div>
+                
+                <!-- Manual Challan Entry Section -->
+                <div id="manual-challan-section">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <button class="btn btn-secondary" onclick="showAvailableChallans()" style="display: none;">Select from Available Challans</button>
+                        </div>
+                    </div>
+                    <div id="challan-container">
+                        <div class="challan-entry">
+                            <div class="form-group">
+                                <label for="payment-challan-no-1">Treasury Challan Number</label>
+                                <input type="text" id="payment-challan-no-1" placeholder="Enter Challan Number">
+                            </div>
+                            <div class="form-group">
+                                <label for="payment-challan-date-1">Challan Date</label>
+                                <input type="date" id="payment-challan-date-1">
+                            </div>
+                            <div class="form-group">
+                                <label for="payment-challan-amount-1">Payment amount against Challan (1)</label>
+                                <input type="number" id="payment-challan-amount-1" placeholder="Enter Payment Amount" onchange="calculateTotalPayment()">
+                            </div>
+                            <button class="btn btn-secondary" onclick="addChallanEntry()">Add Challan</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Section 4: Payment Info</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="payment-amount">Total Payment Amount</label>
+                        <input type="number" id="payment-amount" placeholder="Enter Total Payment Amount" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="payment-tv-no">TV Number</label>
+                        <input type="text" id="payment-tv-no" placeholder="Enter TV Number">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="payment-tv-date">TV Date</label>
+                        <input type="date" id="payment-tv-date">
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" onclick="savePayment()">Save Payment</button>
+            <button class="btn btn-secondary" onclick="clearPaymentForm()">Clear Form</button>
+        </div>
+
+        <!-- View Records Tab -->
+        <div id="view-records" class="tab-content">
+            <div class="form-section">
+                <h3>Deposit Records</h3>
+                <div class="search-container">
+                    <input type="text" id="deposit-search" placeholder="Search deposit records..." onkeyup="searchDeposits()">
+                    <button class="btn" onclick="exportDeposits()">Export Deposits</button>
+                </div>
+                <div class="table-container">
+                    <table id="deposit-records-table">
+                        <thead>
+                            <tr>
+                                <th>Sl. No.</th>
+                                <th>Agency Name</th>
+                                <th>Tender No.</th>
+                                <th>Bill Type</th>
+                                <th>Type</th>
+                                <th>TV Number</th>
+                                <th>Treasury Challan No.</th>
+                                <th>Challan Date</th>
+                                <th>Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deposit-records-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Payment Records</h3>
+                <div class="search-container">
+                    <input type="text" id="payment-search" placeholder="Search payment records..." onkeyup="searchPayments()">
+                    <button class="btn" onclick="exportPayments()">Export Payments</button>
+                </div>
+                <div class="table-container">
+                    <table id="payment-records-table">
+                        <thead>
+                            <tr>
+                                <th>Sl. No.</th>
+                                <th>Agency Name</th>
+                                <th>Tender No.</th>
+                                <th>Treasury Challan No.</th>
+                                <th>Challan Date</th>
+                                <th>Amount</th>
+                                <th>TV Number</th>
+                                <th>TV Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payment-records-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div id="reports" class="tab-content">
+            <div class="form-section">
+                <h3>Generate Reports</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report-type">Report Type</label>
+                        <select id="report-type" onchange="toggleReportFields()">
+                            <option value="ALL">ALL</option>
+                            <option value="AGENCY">Agency Name</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="agency-select-group" style="display: none;">
+                        <label for="report-agency">Select Agency</label>
+                        <select id="report-agency">
+                            <option value="">Select Agency</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report-year">Year</label>
+                        <select id="report-year" onchange="handleYearSelection()">
+                            <option value="">Select Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="report-from-date">From Date</label>
+                        <input type="date" id="report-from-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="report-to-date">To Date</label>
+                        <input type="date" id="report-to-date">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report-format">Report Format</label>
+                        <select id="report-format">
+                            <option value="ABSTRACT">Abstract</option>
+                            <option value="DETAILED">Detailed</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn" onclick="generateReport()">Generate Report</button>
+                <button class="btn btn-secondary" onclick="exportReport()">Export Report</button>
+            </div>
+
+            <div id="report-results" class="hidden">
+                <div class="report-summary">
+                    <h3>Report Summary</h3>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-value" id="opening-balance">₹0</div>
+                            <div class="summary-label">Opening Balance</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="total-credit">₹0</div>
+                            <div class="summary-label">Total Credit</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="total-payment">₹0</div>
+                            <div class="summary-label">Total Payment</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="closing-balance">₹0</div>
+                            <div class="summary-label">Closing Balance</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="report-table">
+                        <thead id="report-thead">
+                        </thead>
+                        <tbody id="report-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

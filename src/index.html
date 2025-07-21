@@ -422,21 +422,72 @@
     </div>
     
     <!-- Authentication Section -->
-    <div id="auth-container">
-  <h2>Register</h2>
-  <input type="email" id="reg-email" placeholder="Email">
-  <input type="password" id="reg-password" placeholder="Password">
-  <button onclick="registerUser()">Register</button>
+    <div id="auth-container" class="auth-section">
+        <div class="auth-header">
+            <h2>🔐 User Authentication</h2>
+            <p>Secure access to Security Deposit Register</p>
+        </div>
 
-  <h2>Login</h2>
-  <input type="email" id="login-email" placeholder="Email">
-  <input type="password" id="login-password" placeholder="Password">
-  <button onclick="loginUser()">Login</button>
+        <!-- User Status Display -->
+        <div id="user-status" class="user-status">
+            <div id="auth-status" class="auth-status-message">Not logged in</div>
+        </div>
 
-  <button onclick="logoutUser()">Logout</button>
+        <!-- Authentication Forms -->
+        <div id="auth-forms" class="auth-forms">
+            <!-- Registration Form -->
+            <div class="auth-form-section">
+                <h3>📝 Create New Account</h3>
+                <div class="form-group">
+                    <label for="reg-email">Email Address</label>
+                    <input type="email" id="reg-email" placeholder="Enter your email address" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" placeholder="Create a strong password" required>
+                </div>
+                <button class="btn btn-primary" onclick="registerUser()">
+                    <span>🚀 Register Account</span>
+                </button>
+            </div>
 
-  <p id="auth-status"></p>
-</div>
+            <!-- Login Form -->
+            <div class="auth-form-section">
+                <h3>🔑 Sign In to Account</h3>
+                <div class="form-group">
+                    <label for="login-email">Email Address</label>
+                    <input type="email" id="login-email" placeholder="Enter your email address" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="Enter your password" required>
+                </div>
+                <button class="btn btn-success" onclick="loginUser()">
+                    <span>✅ Sign In</span>
+                </button>
+            </div>
+
+            <!-- Email Link Sign-In Form -->
+            <div class="auth-form-section">
+                <h3>📧 Passwordless Sign-In</h3>
+                <div class="form-group">
+                    <label for="emailLinkAddress">Email Address</label>
+                    <input type="email" id="emailLinkAddress" placeholder="Enter your email for magic link" required>
+                </div>
+                <button class="btn btn-info" onclick="sendSignInLink()">
+                    <span>🔗 Send Sign-In Link</span>
+                </button>
+                <p id="emailLinkStatus" class="link-status"></p>
+            </div>
+        </div>
+
+        <!-- Logout Section -->
+        <div id="logout-section" class="logout-section" style="display: none;">
+            <button class="btn btn-danger" onclick="logoutUser()">
+                <span>👋 Sign Out</span>
+            </button>
+        </div>
+    </div>
 
 
  <!-- Firebase Compat SDK(core +auth+firestore)(v9.22.2) -->

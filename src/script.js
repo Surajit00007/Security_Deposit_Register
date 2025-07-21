@@ -31,14 +31,8 @@ function init() {
     setupAuthKeyboardListeners();
 }
 
-// Setup keyboard listeners and button click handlers for authentication forms
+// Setup keyboard listeners for authentication forms
 function setupAuthKeyboardListeners() {
-    // Button click handlers
-    document.getElementById('register-btn').addEventListener('click', registerUser);
-    document.getElementById('login-btn').addEventListener('click', loginUser);
-    document.getElementById('email-link-btn').addEventListener('click', sendSignInLink);
-    document.getElementById('logout-btn').addEventListener('click', logoutUser);
-    
     // Register form - Enter key support
     document.getElementById('reg-email').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -48,7 +42,7 @@ function setupAuthKeyboardListeners() {
     
     document.getElementById('reg-password').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            registerUser();
+            window.registerUser();
         }
     });
     
@@ -61,22 +55,22 @@ function setupAuthKeyboardListeners() {
     
     document.getElementById('login-password').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            loginUser();
+            window.loginUser();
         }
     });
     
     // Email link form - Enter key support
     document.getElementById('emailLinkAddress').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            sendSignInLink();
+            window.sendSignInLink();
         }
     });
     
-    console.log('✅ Authentication event listeners attached successfully');
+    console.log('✅ Authentication keyboard listeners and global functions attached successfully');
 }
 
-// User authentication
-function registerUser() {
+// User authentication - Explicitly attached to global scope
+window.registerUser = function() {
   const email = document.getElementById("reg-email").value.trim();
   const password = document.getElementById("reg-password").value;
 
@@ -95,9 +89,9 @@ function registerUser() {
     .catch((error) => {
       updateAuthStatus(`❌ Registration failed: ${error.message}`, "error");
     });
-}
+};
 
-function loginUser() {
+window.loginUser = function() {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
@@ -116,9 +110,9 @@ function loginUser() {
     .catch((error) => {
       updateAuthStatus(`❌ Sign in failed: ${error.message}`, "error");
     });
-}
+};
 
-function logoutUser() {
+window.logoutUser = function() {
   updateAuthStatus("🔄 Signing out...", "info");
   
   auth.signOut().then(() => {
@@ -127,9 +121,9 @@ function logoutUser() {
   }).catch((error) => {
     updateAuthStatus(`❌ Sign out failed: ${error.message}`, "error");
   });
-}
+};
 
-function sendSignInLink() {
+window.sendSignInLink = function() {
   const email = document.getElementById("emailLinkAddress").value.trim();
   
   if (!email) {
@@ -157,7 +151,15 @@ function sendSignInLink() {
     .catch(err => {
       document.getElementById("emailLinkStatus").innerText = `❌ Failed to send link: ${err.message}`;
     });
-}
+};
+
+// Confirm global functions are loaded
+console.log('✅ Global authentication functions loaded:', {
+    registerUser: typeof window.registerUser,
+    loginUser: typeof window.loginUser,
+    logoutUser: typeof window.logoutUser,
+    sendSignInLink: typeof window.sendSignInLink
+});
 
 // Helper functions for UI management
 function updateAuthStatus(message, type = "info") {

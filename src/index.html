@@ -446,7 +446,7 @@
                     <label for="reg-password">Password</label>
                     <input type="password" id="reg-password" placeholder="Create a strong password" required>
                 </div>
-                <button class="btn btn-primary" id="register-btn">
+                <button class="btn btn-primary" onclick="registerUser()">
                     <span>🚀 Register Account</span>
                 </button>
             </div>
@@ -462,7 +462,7 @@
                     <label for="login-password">Password</label>
                     <input type="password" id="login-password" placeholder="Enter your password" required>
                 </div>
-                <button class="btn btn-success" id="login-btn">
+                <button class="btn btn-success" onclick="loginUser()">
                     <span>✅ Sign In</span>
                 </button>
             </div>
@@ -474,7 +474,7 @@
                     <label for="emailLinkAddress">Email Address</label>
                     <input type="email" id="emailLinkAddress" placeholder="Enter your email for magic link" required>
                 </div>
-                <button class="btn btn-info" id="email-link-btn">
+                <button class="btn btn-info" onclick="sendSignInLink()">
                     <span>🔗 Send Sign-In Link</span>
                 </button>
                 <p id="emailLinkStatus" class="link-status"></p>
@@ -483,7 +483,7 @@
 
         <!-- Logout Section -->
         <div id="logout-section" class="logout-section" style="display: none;">
-            <button class="btn btn-danger" id="logout-btn">
+            <button class="btn btn-danger" onclick="logoutUser()">
                 <span>👋 Sign Out</span>
             </button>
         </div>

@@ -420,6 +420,24 @@
             </div>
         </div>
     </div>
+    
+    <!-- Authentication Section -->
+    <div id="auth-container">
+  <h2>Register</h2>
+  <input type="email" id="reg-email" placeholder="Email">
+  <input type="password" id="reg-password" placeholder="Password">
+  <button onclick="registerUser()">Register</button>
+
+  <h2>Login</h2>
+  <input type="email" id="login-email" placeholder="Email">
+  <input type="password" id="login-password" placeholder="Password">
+  <button onclick="loginUser()">Login</button>
+
+  <button onclick="logoutUser()">Logout</button>
+
+  <p id="auth-status"></p>
+</div>
+
 
  <!-- Firebase Compat SDK(core +auth+firestore)(v9.22.2) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>

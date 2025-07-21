@@ -30,6 +30,48 @@ function init() {
     refreshTables();
 }
 
+// User authentication
+function registerUser() {
+  const email = document.getElementById("reg-email").value;
+  const password = document.getElementById("reg-password").value;
+
+  auth.createUserWithEmailAndPassword(email, password)
+    .then((userCredential) => {
+      document.getElementById("auth-status").innerText = "✅ Registered successfully!";
+    })
+    .catch((error) => {
+      document.getElementById("auth-status").innerText = `❌ ${error.message}`;
+    });
+}
+
+function loginUser() {
+  const email = document.getElementById("login-email").value;
+  const password = document.getElementById("login-password").value;
+
+  auth.signInWithEmailAndPassword(email, password)
+    .then((userCredential) => {
+      document.getElementById("auth-status").innerText = "✅ Logged in!";
+    })
+    .catch((error) => {
+      document.getElementById("auth-status").innerText = `❌ ${error.message}`;
+    });
+}
+
+function logoutUser() {
+  auth.signOut().then(() => {
+    document.getElementById("auth-status").innerText = "👋 Logged out.";
+  });
+}
+
+// Monitor auth state
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    document.getElementById("auth-status").innerText = `👋 Welcome, ${user.email}`;
+  } else {
+    document.getElementById("auth-status").innerText = `Not logged in.`;
+  }
+});
+
 // Tab management
 function openTab(tabName) {
     // Hide all tab contents

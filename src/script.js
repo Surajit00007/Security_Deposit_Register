@@ -1,3 +1,19 @@
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAwMLOh7VtM2Ak74gQVrtHJtWHkm6O3XyM",
+  authDomain: "pwdsubrata.firebaseapp.com",
+  projectId: "pwdsubrata",
+  storageBucket: "pwdsubrata.firebasestorage.app",
+  messagingSenderId: "838170858736",
+  appId: "1:838170858736:web:5eae624b7fcd930474de35",
+  measurementId: "G-RGNST02KXX"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 // Data storage
 let agencies = [];
 let deposits = [];

@@ -1,75 +1,8 @@
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAwMLOh7VtM2Ak74gQVrtHJtWHkm6O3XyM",
-  authDomain: "pwdsubrata.firebaseapp.com",
-  projectId: "pwdsubrata",
-  storageBucket: "pwdsubrata.firebasestorage.app",
-  messagingSenderId: "838170858736",
-  appId: "1:838170858736:web:5eae624b7fcd930474de35",
-  measurementId: "G-RGNST02KXX"
-};
+// Firebase is already initialized in index.html
+// Using global firebase, auth, db variables
+// ===== GLOBAL AUTHENTICATION FUNCTIONS (Must be defined first) =====
+// These functions are attached to window object for onclick handlers
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-
-// Data storage
-let agencies = [];
-let deposits = [];
-let payments = [];
-let challanCounter = 1;
-let editingDepositId = null;
-let editingPaymentId = null;
-
-// Initialize application
-function init() {
-    loadData();
-    populateDropdowns();
-    populateYearDropdown();
-    refreshTables();
-    setupAuthKeyboardListeners();
-}
-
-// Setup keyboard listeners for authentication forms
-function setupAuthKeyboardListeners() {
-    // Register form - Enter key support
-    document.getElementById('reg-email').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            document.getElementById('reg-password').focus();
-        }
-    });
-    
-    document.getElementById('reg-password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            window.registerUser();
-        }
-    });
-    
-    // Login form - Enter key support
-    document.getElementById('login-email').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            document.getElementById('login-password').focus();
-        }
-    });
-    
-    document.getElementById('login-password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            window.loginUser();
-        }
-    });
-    
-    // Email link form - Enter key support
-    document.getElementById('emailLinkAddress').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            window.sendSignInLink();
-        }
-    });
-    
-    console.log('✅ Authentication keyboard listeners and global functions attached successfully');
-}
-
-// User authentication - Explicitly attached to global scope
 window.registerUser = function() {
   const email = document.getElementById("reg-email").value.trim();
   const password = document.getElementById("reg-password").value;
@@ -153,13 +86,70 @@ window.sendSignInLink = function() {
     });
 };
 
-// Confirm global functions are loaded
+// Confirm global functions are loaded immediately
 console.log('✅ Global authentication functions loaded:', {
     registerUser: typeof window.registerUser,
     loginUser: typeof window.loginUser,
     logoutUser: typeof window.logoutUser,
     sendSignInLink: typeof window.sendSignInLink
 });
+
+// ===== END GLOBAL FUNCTIONS =====
+
+// Data storage
+let agencies = [];
+let deposits = [];
+let payments = [];
+let challanCounter = 1;
+let editingDepositId = null;
+let editingPaymentId = null;
+
+// Initialize application
+function init() {
+    loadData();
+    populateDropdowns();
+    populateYearDropdown();
+    refreshTables();
+    setupAuthKeyboardListeners();
+}
+
+// Setup keyboard listeners for authentication forms
+function setupAuthKeyboardListeners() {
+    // Register form - Enter key support
+    document.getElementById('reg-email').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('reg-password').focus();
+        }
+    });
+    
+    document.getElementById('reg-password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            window.registerUser();
+        }
+    });
+    
+    // Login form - Enter key support
+    document.getElementById('login-email').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('login-password').focus();
+        }
+    });
+    
+    document.getElementById('login-password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            window.loginUser();
+        }
+    });
+    
+    // Email link form - Enter key support
+    document.getElementById('emailLinkAddress').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            window.sendSignInLink();
+        }
+    });
+    
+    console.log('✅ Authentication keyboard listeners and global functions attached successfully');
+}
 
 // Helper functions for UI management
 function updateAuthStatus(message, type = "info") {

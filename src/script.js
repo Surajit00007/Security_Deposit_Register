@@ -1,9 +1,9 @@
 // Firebase is already initialized in index.html
 // Using global firebase, auth, db variables
-// ===== GLOBAL AUTHENTICATION FUNCTIONS (Must be defined first) =====
-// These functions are attached to window object for onclick handlers
+// ===== AUTHENTICATION FUNCTIONS =====
+// These functions use modern addEventListener approach (no onclick needed)
 
-window.registerUser = function() {
+function registerUser() {
   const email = document.getElementById("reg-email").value.trim();
   const password = document.getElementById("reg-password").value;
 
@@ -24,7 +24,7 @@ window.registerUser = function() {
     });
 };
 
-window.loginUser = function() {
+function loginUser() {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
@@ -45,7 +45,7 @@ window.loginUser = function() {
     });
 };
 
-window.logoutUser = function() {
+function logoutUser() {
   updateAuthStatus("🔄 Signing out...", "info");
   
   auth.signOut().then(() => {
@@ -56,7 +56,7 @@ window.logoutUser = function() {
   });
 };
 
-window.sendSignInLink = function() {
+function sendSignInLink() {
   const email = document.getElementById("emailLinkAddress").value.trim();
   
   if (!email) {
@@ -86,12 +86,12 @@ window.sendSignInLink = function() {
     });
 };
 
-// Confirm global functions are loaded immediately
-console.log('✅ Global authentication functions loaded:', {
-    registerUser: typeof window.registerUser,
-    loginUser: typeof window.loginUser,
-    logoutUser: typeof window.logoutUser,
-    sendSignInLink: typeof window.sendSignInLink
+// Confirm authentication functions are loaded
+console.log('✅ Authentication functions loaded:', {
+    registerUser: typeof registerUser,
+    loginUser: typeof loginUser,
+    logoutUser: typeof logoutUser,
+    sendSignInLink: typeof sendSignInLink
 });
 
 // ===== END GLOBAL FUNCTIONS =====
@@ -113,8 +113,13 @@ function init() {
     setupAuthKeyboardListeners();
 }
 
-// Setup keyboard listeners for authentication forms
+// Setup event listeners for authentication forms (buttons + keyboard)
 function setupAuthKeyboardListeners() {
+    // Button click handlers - Modern approach using addEventListener
+    document.getElementById('register-btn').addEventListener('click', registerUser);
+    document.getElementById('login-btn').addEventListener('click', loginUser);
+    document.getElementById('logout-btn').addEventListener('click', logoutUser);
+    
     // Register form - Enter key support
     document.getElementById('reg-email').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -124,7 +129,7 @@ function setupAuthKeyboardListeners() {
     
     document.getElementById('reg-password').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            window.registerUser();
+            registerUser();
         }
     });
     
@@ -137,18 +142,11 @@ function setupAuthKeyboardListeners() {
     
     document.getElementById('login-password').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            window.loginUser();
+            loginUser();
         }
     });
     
-    // Email link form - Enter key support
-    document.getElementById('emailLinkAddress').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            window.sendSignInLink();
-        }
-    });
-    
-    console.log('✅ Authentication keyboard listeners and global functions attached successfully');
+    console.log('✅ Authentication event listeners attached successfully (modern approach)');
 }
 
 // Helper functions for UI management

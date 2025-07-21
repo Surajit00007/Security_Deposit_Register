@@ -1,5 +1,18 @@
-// Firebase is already initialized in index.html
-// Using global firebase, auth, db variables
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAwMLOh7VtM2Ak74gQVrtHJtWHkm6O3XyM",
+  authDomain: "pwdsubrata.firebaseapp.com",
+  projectId: "pwdsubrata",
+  storageBucket: "pwdsubrata.firebasestorage.app",
+  messagingSenderId: "838170858736",
+  appId: "1:838170858736:web:5eae624b7fcd930474de35",
+  measurementId: "G-RGNST02KXX"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 // Data storage
 let agencies = [];
@@ -18,8 +31,14 @@ function init() {
     setupAuthKeyboardListeners();
 }
 
-// Setup keyboard listeners for authentication forms
+// Setup keyboard listeners and button click handlers for authentication forms
 function setupAuthKeyboardListeners() {
+    // Button click handlers
+    document.getElementById('register-btn').addEventListener('click', registerUser);
+    document.getElementById('login-btn').addEventListener('click', loginUser);
+    document.getElementById('email-link-btn').addEventListener('click', sendSignInLink);
+    document.getElementById('logout-btn').addEventListener('click', logoutUser);
+    
     // Register form - Enter key support
     document.getElementById('reg-email').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -52,35 +71,9 @@ function setupAuthKeyboardListeners() {
             sendSignInLink();
         }
     });
+    
+    console.log('✅ Authentication event listeners attached successfully');
 }
-
-// Auto-handle email link sign-in on page load
-window.addEventListener('load', () => {
-  if (auth.isSignInWithEmailLink(window.location.href)) {
-    updateAuthStatus("🔄 Processing sign-in link...", "info");
-    
-    let email = window.localStorage.getItem('emailForSignIn');
-    if (!email) {
-      email = window.prompt('Please provide your email for confirmation');
-    }
-    
-    if (email) {
-      auth.signInWithEmailLink(email, window.location.href)
-        .then(result => {
-          window.localStorage.removeItem('emailForSignIn');
-          updateAuthStatus(`🎉 Successfully signed in via email link! Welcome, ${result.user.email}`, "success");
-          // Clean up URL by removing query parameters
-          window.history.replaceState({}, document.title, window.location.pathname);
-        })
-        .catch(err => {
-          console.error(err);
-          updateAuthStatus(`❌ Email link sign-in failed: ${err.message}`, "error");
-        });
-    } else {
-      updateAuthStatus("❌ Email confirmation required for sign-in", "error");
-    }
-  }
-});
 
 // User authentication
 function registerUser() {

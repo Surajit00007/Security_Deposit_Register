@@ -36,16 +36,19 @@ A comprehensive web-based management system for tracking security deposits, EMD 
 
 ## Technology Stack
 
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript
-- **Storage**: Browser LocalStorage (client-side)
+- **Frontend**: HTML5, CSS3, Modern JavaScript (ES6+)
+- **Authentication**: Firebase Authentication
+- **Database**: Firebase Firestore
 - **Styling**: Custom CSS with responsive design
+- **Architecture**: Modern event-driven JavaScript (addEventListener approach)
 - **Icons**: Unicode emojis for visual appeal
 
 ## Getting Started
 
 ### Prerequisites
 - Modern web browser (Chrome, Firefox, Safari, Edge)
-- No server setup required - runs entirely in the browser
+- Internet connection (for Firebase services)
+- Web server (for local development)
 
 ### Installation
 
@@ -57,8 +60,13 @@ A comprehensive web-based management system for tracking security deposits, EMD 
 
 #### Local Development
 ```bash
-# Simply open the HTML file
-open src/index.html
+# Using Python
+python -m http.server 8080 --directory src
+
+# Using Node.js
+npx serve src -p 8080
+
+# Then open: http://localhost:8080
 ```
 
 #### Web Deployment (Netlify, GitHub Pages, etc.)
@@ -79,7 +87,12 @@ SubrataSahooAPP/
 
 ## Usage
 
-### 1. Agency Management
+### 1. Authentication
+- Register a new account or login with existing credentials
+- All data is tied to your authenticated user account
+- Secure session management with Firebase
+
+### 2. Agency Management
 - Start by adding agencies in the "Agency Database" tab
 - Enter PAN numbers (format: ABCDE1234F) and company names
 - Use the search feature to quickly find agencies
@@ -108,10 +121,11 @@ SubrataSahooAPP/
 
 ## Data Storage
 
-- All data is stored locally in your browser using LocalStorage
-- Data persists between sessions on the same browser
-- **Important**: Data is device/browser specific and not synced across devices
-- Consider regular exports for backup purposes
+- All data is stored securely in Firebase Firestore
+- Data is tied to your authenticated user account
+- **Cloud Sync**: Access your data from any device after login
+- **Backup**: Data is automatically backed up by Firebase
+- **Security**: Industry-standard security with Firebase Authentication
 
 ## Browser Compatibility
 

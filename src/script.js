@@ -1,7 +1,8 @@
 // Firebase is already initialized in index.html
 // Using global firebase, auth, db variables
+
 // ===== AUTHENTICATION FUNCTIONS =====
-// These functions use modern addEventListener approach (no onclick needed)
+// Modern approach using addEventListener (no onclick needed)
 
 function registerUser() {
   const email = document.getElementById("reg-email").value.trim();
@@ -22,7 +23,7 @@ function registerUser() {
     .catch((error) => {
       updateAuthStatus(`❌ Registration failed: ${error.message}`, "error");
     });
-};
+}
 
 function loginUser() {
   const email = document.getElementById("login-email").value.trim();
@@ -37,84 +38,42 @@ function loginUser() {
 
   auth.signInWithEmailAndPassword(email, password)
     .then((userCredential) => {
-      updateAuthStatus(`✅ Successfully signed in! Welcome back, ${userCredential.user.email}`, "success");
+      updateAuthStatus(`✅ Welcome back, ${userCredential.user.email}!`, "success");
       clearAuthForms();
     })
     .catch((error) => {
       updateAuthStatus(`❌ Sign in failed: ${error.message}`, "error");
     });
-};
+}
 
 function logoutUser() {
   updateAuthStatus("🔄 Signing out...", "info");
   
   auth.signOut().then(() => {
     updateAuthStatus("👋 You have been signed out successfully", "info");
-    showAuthForms();
   }).catch((error) => {
     updateAuthStatus(`❌ Sign out failed: ${error.message}`, "error");
   });
-};
+}
 
-function sendSignInLink() {
-  const email = document.getElementById("emailLinkAddress").value.trim();
-  
-  if (!email) {
-    document.getElementById("emailLinkStatus").innerText = "❌ Please enter your email address";
-    return;
+// Helper functions for authentication
+function updateAuthStatus(message, type = "info") {
+  const statusElement = document.getElementById("auth-status");
+  if (statusElement) {
+    statusElement.textContent = message;
+    statusElement.className = `auth-status-message ${type}`;
   }
+}
 
-  if (!isValidEmail(email)) {
-    document.getElementById("emailLinkStatus").innerText = "❌ Please enter a valid email address";
-    return;
-  }
-
-  document.getElementById("emailLinkStatus").innerText = "🔄 Sending sign-in link...";
-
-  const actionCodeSettings = {
-    url: window.location.href,
-    handleCodeInApp: true,
-  };
-  
-  auth.sendSignInLinkToEmail(email, actionCodeSettings)
-    .then(() => {
-      window.localStorage.setItem('emailForSignIn', email);
-      document.getElementById("emailLinkStatus").innerText = "✅ Sign-in link sent! Check your inbox and click the link to sign in.";
-    })
-    .catch(err => {
-      document.getElementById("emailLinkStatus").innerText = `❌ Failed to send link: ${err.message}`;
-    });
-};
-
-// Confirm authentication functions are loaded
-console.log('✅ Authentication functions loaded:', {
-    registerUser: typeof registerUser,
-    loginUser: typeof loginUser,
-    logoutUser: typeof logoutUser,
-    sendSignInLink: typeof sendSignInLink
-});
-
-// ===== END GLOBAL FUNCTIONS =====
-
-// Data storage
-let agencies = [];
-let deposits = [];
-let payments = [];
-let challanCounter = 1;
-let editingDepositId = null;
-let editingPaymentId = null;
-
-// Initialize application
-function init() {
-    loadData();
-    populateDropdowns();
-    populateYearDropdown();
-    refreshTables();
-    setupAuthKeyboardListeners();
+function clearAuthForms() {
+  document.getElementById("reg-email").value = "";
+  document.getElementById("reg-password").value = "";
+  document.getElementById("login-email").value = "";
+  document.getElementById("login-password").value = "";
 }
 
 // Setup event listeners for authentication forms (buttons + keyboard)
-function setupAuthKeyboardListeners() {
+function setupAuthEventListeners() {
     // Button click handlers - Modern approach using addEventListener
     document.getElementById('register-btn').addEventListener('click', registerUser);
     document.getElementById('login-btn').addEventListener('click', loginUser);
@@ -145,56 +104,35 @@ function setupAuthKeyboardListeners() {
             loginUser();
         }
     });
-    
-    console.log('✅ Authentication event listeners attached successfully (modern approach)');
 }
 
-// Helper functions for UI management
-function updateAuthStatus(message, type = "info") {
-  const statusElement = document.getElementById("auth-status");
-  statusElement.innerText = message;
-  
-  // Remove existing classes
-  statusElement.classList.remove("success", "error", "info");
-  
-  // Add new class based on type
-  if (type) {
-    statusElement.classList.add(type);
-  }
+// ===== END AUTHENTICATION FUNCTIONS =====
+
+// Data storage
+let agencies = [];
+let deposits = [];
+let payments = [];
+let challanCounter = 1;
+let editingDepositId = null;
+let editingPaymentId = null;
+
+// Initialize application
+function init() {
+    loadData();
+    populateDropdowns();
+    populateYearDropdown();
+    refreshTables();
+    setupAuthEventListeners();
 }
 
-function clearAuthForms() {
-  document.getElementById("reg-email").value = "";
-  document.getElementById("reg-password").value = "";
-  document.getElementById("login-email").value = "";
-  document.getElementById("login-password").value = "";
-  document.getElementById("emailLinkAddress").value = "";
-  document.getElementById("emailLinkStatus").innerText = "";
-}
 
-function showAuthForms() {
-  document.getElementById("auth-forms").style.display = "grid";
-  document.getElementById("logout-section").style.display = "none";
-}
-
-function hideAuthForms() {
-  document.getElementById("auth-forms").style.display = "none";
-  document.getElementById("logout-section").style.display = "block";
-}
-
-function isValidEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
 
 // Monitor auth state
 auth.onAuthStateChanged((user) => {
   if (user) {
-    updateAuthStatus(`🎉 Welcome back, ${user.email}! You are successfully signed in.`, "success");
-    hideAuthForms();
+    document.getElementById("auth-status").innerText = `👋 Welcome, ${user.email}`;
   } else {
-    updateAuthStatus("🔐 Please sign in to access the Security Deposit Register", "info");
-    showAuthForms();
+    document.getElementById("auth-status").innerText = `Not logged in.`;
   }
 });
 

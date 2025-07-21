@@ -426,7 +426,25 @@
 <script src="https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"></script>
 
-<!-- Your script that uses Firebase -->
+<!-- Firebase Initialization -->
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAwMLOh7VtM2Ak74gQVrtHJtWHkm6O3XyM",
+    authDomain: "pwdsubrata.firebaseapp.com",
+    projectId: "pwdsubrata",
+    storageBucket: "pwdsubrata.firebasestorage.app",
+    messagingSenderId: "838170858736",
+    appId: "1:838170858736:web:5eae624b7fcd930474de35",
+    measurementId: "G-RGNST02KXX"
+  };
+
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+
+<!-- Your main script must come AFTER Firebase is initialized -->
 <script src="script.js"></script>
 <script>
   window.onload = init;

@@ -642,3 +642,31 @@ tr:hover {
     color: #0c5460;
     border: 1px solid #bee5eb;
 }
+#forgot-password-container {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+#reset-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#reset-btn:hover {
+    background-color: #138496;
+}
+
+#reset-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+#resetEmail {
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}

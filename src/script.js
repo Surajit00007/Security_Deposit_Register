@@ -1,9 +1,10 @@
-// Firebase is already initialized in index.html
+﻿// Firebase is already initialized in index.html
 // Using global firebase, auth, db variables
 
 // Global variables for current user
 let currentUser = null;
 let userDataRef = null;
+let userDataListener = null; // For real-time sync
 
 // ===== AUTHENTICATION FUNCTIONS =====
 
@@ -12,21 +13,21 @@ function registerUser() {
   const password = document.getElementById("reg-password").value;
 
   if (!email || !password) {
-    updateAuthStatus("❌ Please fill in all fields", "error");
+    updateAuthStatus("⚠ Please fill in all fields", "error");
     return;
   }
 
-  updateAuthStatus("🔄 Creating account...", "info");
+  updateAuthStatus("⏳ Creating account...", "info");
 
   auth.createUserWithEmailAndPassword(email, password)
     .then((userCredential) => {
-      updateAuthStatus(`🎉 Account created successfully! Welcome, ${userCredential.user.email}`, "success");
+      updateAuthStatus("✅ Account created successfully! Welcome!", "success");
       clearAuthForms();
       // Initialize user data in Firestore
       initializeUserData(userCredential.user.uid);
     })
     .catch((error) => {
-      updateAuthStatus(`❌ Registration failed: ${error.message}`, "error");
+      updateAuthStatus("❌ Registration failed: " + error.message, "error");
     });
 }
 
@@ -35,33 +36,33 @@ function loginUser() {
   const password = document.getElementById("login-password").value;
 
   if (!email || !password) {
-    updateAuthStatus("❌ Please fill in all fields", "error");
+    updateAuthStatus("⚠ Please fill in all fields", "error");
     return;
   }
 
-  updateAuthStatus("🔄 Signing in...", "info");
+  updateAuthStatus("⏳ Signing in...", "info");
 
   auth.signInWithEmailAndPassword(email, password)
     .then((userCredential) => {
-      updateAuthStatus(`✅ Welcome back, ${userCredential.user.email}!`, "success");
+      updateAuthStatus("✅ Welcome back!", "success");
       clearAuthForms();
-      // Load user data from Firestore
+      // Load user data from Firestore with real-time sync
       loadUserDataFromFirestore(userCredential.user.uid);
     })
     .catch((error) => {
-      updateAuthStatus(`❌ Sign in failed: ${error.message}`, "error");
+      updateAuthStatus("❌ Sign in failed: " + error.message, "error");
     });
 }
 
 function logoutUser() {
-  updateAuthStatus("🔄 Signing out...", "info");
+  updateAuthStatus("⏳ Signing out...", "info");
   
   auth.signOut().then(() => {
-    updateAuthStatus("👋 You have been signed out successfully", "info");
-    // Clear local data
+    updateAuthStatus("✅ You have been signed out successfully", "info");
+    // Clear local data and stop real-time listener
     clearUserData();
   }).catch((error) => {
-    updateAuthStatus(`❌ Sign out failed: ${error.message}`, "error");
+    updateAuthStatus("❌ Sign out failed: " + error.message, "error");
   });
 }
 
@@ -70,7 +71,7 @@ function updateAuthStatus(message, type = "info") {
   const statusElement = document.getElementById("auth-status");
   if (statusElement) {
     statusElement.textContent = message;
-    statusElement.className = `auth-status-message ${type}`;
+    statusElement.className = "auth-status-message " + type;
   }
 }
 
@@ -113,6 +114,9 @@ function setupAuthEventListeners() {
             loginUser();
         }
     });
+    
+    // Password reset - Enter key support
+    setupPasswordResetEventListeners();
 }
 
 // ===== END AUTHENTICATION FUNCTIONS =====
@@ -133,24 +137,22 @@ function init() {
     // Check if user is already authenticated
     auth.onAuthStateChanged((user) => {
         if (user) {
-            document.getElementById("auth-status").innerText = `👋 Welcome, ${user.email}`;
+            document.getElementById("auth-status").innerText = `✅ Welcome, ${user.email}`;
             // Update header status
             const headerStatus = document.getElementById('auth-status-header');
             if (headerStatus) {
-                headerStatus.textContent = `👋 Welcome, ${user.email}`;
+                headerStatus.textContent = `✅ Welcome, ${user.email}`;
                 headerStatus.style.color = '#28a745';
             }
-            // Load user data when authenticated
+            // Load user data when authenticated with real-time sync
             loadUserDataFromFirestore(user.uid);
         } else {
-            document.getElementById("auth-status").innerText = `Please login to access your data.`;
+            document.getElementById("auth-status").innerText = "Please login to access your data.";
             // Clear data when not authenticated
             clearUserData();
         }
     });
 }
-
-
 
 // ===== FIRESTORE INTEGRATION FUNCTIONS =====
 
@@ -172,7 +174,7 @@ async function initializeUserData(userId) {
     // Set up user data reference
     currentUser = userId;
     userDataRef = db.collection('users').doc(userId);
-    // Load user data
+    // Load user data with real-time sync
     await loadUserDataFromFirestore(userId);
   } catch (error) {
     console.error('Error initializing user data:', error);
@@ -180,27 +182,23 @@ async function initializeUserData(userId) {
   }
 }
 
-// Load user data from Firestore
+// Load user data from Firestore with real-time sync
 async function loadUserDataFromFirestore(userId) {
   try {
     currentUser = userId;
     userDataRef = db.collection('users').doc(userId);
     
+    // First, check if document exists
     const userDoc = await userDataRef.get();
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      agencies = userData.agencies || [];
-      deposits = userData.deposits || [];
-      payments = userData.payments || [];
-      
-      // Refresh UI
-      populateDropdowns();
-      refreshTables();
-      console.log('User data loaded from Firestore');
-    } else {
+    if (!userDoc.exists) {
       // Initialize if document doesn't exist
       await initializeUserData(userId);
+      return;
     }
+    
+    // Set up real-time listener for live sync
+    setupRealtimeListener(userId);
+    
   } catch (error) {
     console.error('Error loading user data:', error);
     if (error.code === 'permission-denied') {
@@ -213,7 +211,62 @@ async function loadUserDataFromFirestore(userId) {
   }
 }
 
-// Save user data to Firestore
+// Set up real-time listener for live data synchronization
+function setupRealtimeListener(userId) {
+  // Remove existing listener if any
+  if (userDataListener) {
+    userDataListener();
+    userDataListener = null;
+  }
+  
+  // Set up new real-time listener
+  userDataListener = db.collection('users').doc(userId).onSnapshot((doc) => {
+    if (doc.exists) {
+      const userData = doc.data();
+      
+      // Update local data arrays
+      agencies = userData.agencies || [];
+      deposits = userData.deposits || [];
+      payments = userData.payments || [];
+      
+      // Refresh UI immediately with new data
+      populateDropdowns();
+      refreshTables();
+      
+      console.log('User data synced in real-time from Firestore');
+      
+      // Show sync indicator
+      const headerStatus = document.getElementById('auth-status-header');
+      if (headerStatus && currentUser) {
+        const userEmail = auth.currentUser ? auth.currentUser.email : 'User';
+        headerStatus.textContent = `✅ Welcome, ${userEmail} (✅ Synced)`;
+        headerStatus.style.color = '#28a745';
+        
+        // Remove sync indicator after 2 seconds
+        setTimeout(() => {
+          if (headerStatus && currentUser) {
+            headerStatus.textContent = `✅ Welcome, ${userEmail}`;
+          }
+        }, 2000);
+      }
+    } else {
+      console.log('User document does not exist');
+      // Initialize user data if document doesn't exist
+      initializeUserData(userId);
+    }
+  }, (error) => {
+    console.error('Real-time listener error:', error);
+    if (error.code === 'permission-denied') {
+      showAlert('Permission denied. Please check your authentication.', 'error');
+    } else if (error.code === 'unavailable') {
+      showAlert('Network error. Please check your internet connection.', 'error');
+    } else {
+      showAlert('Error syncing data: ' + error.message, 'error');
+    }
+  });
+}
+
+// Save user data to Firestore with improved feedback
 async function saveUserDataToFirestore() {
   if (!currentUser || !userDataRef) {
     console.log('No user logged in, skipping Firestore save');
@@ -221,15 +274,37 @@ async function saveUserDataToFirestore() {
   }
   
   try {
+    // Show saving indicator
+    const headerStatus = document.getElementById('auth-status-header');
+    const userEmail = auth.currentUser ? auth.currentUser.email : 'User';
+    if (headerStatus) {
+      headerStatus.textContent = `⏳ Saving data...`;
+      headerStatus.style.color = '#007bff';
+    }
+
     await userDataRef.update({
       agencies: agencies,
       deposits: deposits,
       payments: payments,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
     });
+    
     console.log('User data saved to Firestore');
+    
+    // The real-time listener will automatically update the UI
+    // So we don't need to manually refresh here
+    
   } catch (error) {
     console.error('Error saving user data:', error);
+    
+    // Restore header status on error
+    const headerStatus = document.getElementById('auth-status-header');
+    if (headerStatus) {
+      const userEmail = auth.currentUser ? auth.currentUser.email : 'User';
+      headerStatus.textContent = `✅ Welcome, ${userEmail}`;
+      headerStatus.style.color = '#28a745';
+    }
+    
     if (error.code === 'permission-denied') {
       showAlert('Permission denied. Please check your authentication.', 'error');
     } else if (error.code === 'unavailable') {
@@ -242,6 +317,12 @@ async function saveUserDataToFirestore() {
 
 // Clear local user data on logout
 function clearUserData() {
+  // Stop real-time listener
+  if (userDataListener) {
+    userDataListener();
+    userDataListener = null;
+  }
+  
   currentUser = null;
   userDataRef = null;
   agencies = [];
@@ -263,7 +344,7 @@ function clearUserData() {
 // Auth state monitoring is now handled in the init() function
 
 // Tab management
-function openTab(tabName) {
+function openTab(event, tabName) {
     // Hide all tab contents
     const tabContents = document.querySelectorAll('.tab-content');
     tabContents.forEach(content => content.classList.remove('active'));
@@ -279,10 +360,10 @@ function openTab(tabName) {
     if (event && event.target) {
         event.target.classList.add('active');
     } else {
-        // For programmatic calls, find the tab by content
+        // For programmatic calls, find the tab by data attribute or similar
         const tabButtons = document.querySelectorAll('.tab');
         tabButtons.forEach(tab => {
-            if (tab.onclick && tab.onclick.toString().includes(`'${tabName}'`)) {
+            if (tab.getAttribute('onclick') && tab.getAttribute('onclick').includes(tabName)) {
                 tab.classList.add('active');
             }
         });
@@ -294,11 +375,12 @@ function openTab(tabName) {
     }
 }
 
-// Data persistence
+// Data persistence with automatic refresh
 function saveData() {
     // Save to Firestore if user is logged in
     if (currentUser) {
         saveUserDataToFirestore();
+        // Real-time listener will handle UI refresh automatically
     } else {
         console.log('No user logged in, data not saved to Firestore');
     }
@@ -306,9 +388,168 @@ function saveData() {
 
 function loadData() {
     // Data is now loaded from Firestore in the auth state change handler
-    // This function is kept for compatibility but data loading is handled by Firestore
+    // This function is kept for compatibility but data loading is handled by Firestore integration
     console.log('loadData called - data loading handled by Firestore integration');
 }
+
+// Utility functions
+function showAlert(message, type) {
+    // Create alert element
+    const alert = document.createElement('div');
+    alert.className = "alert alert-" + type;
+    alert.textContent = message;
+    
+    // Insert at the beginning of the active tab
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab) {
+        activeTab.insertBefore(alert, activeTab.firstChild);
+    }
+    
+    // Remove alert after 3 seconds
+    setTimeout(() => {
+        alert.remove();
+    }, 3000);
+}
+
+function refreshTables() {
+    refreshAgencyTable();
+    refreshRecordTables();
+}
+
+function refreshRecordTables() {
+    refreshDepositRecords();
+    refreshPaymentRecords();
+}
+
+function refreshAgencyTable() {
+    const tbody = document.getElementById('agency-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+
+    agencies.forEach((agency, index) => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${agency.pan}</td>
+            <td>${agency.name}</td>
+            <td>${index + 1}</td>
+            <td>
+                <button class="btn btn-secondary" onclick="editAgency(${agency.id})">Edit</button>
+                <button class="btn btn-danger" onclick="deleteAgency(${agency.id})">Delete</button>
+            </td>
+        `;
+    });
+}
+
+function refreshDepositRecords() {
+    const tbody = document.getElementById('deposit-records-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+
+    deposits.forEach((deposit, index) => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${deposit.agencyName}</td>
+            <td>${deposit.tenderNo}</td>
+            <td>${deposit.nature}</td>
+            <td>${deposit.tvNo}</td>
+            <td>${deposit.challanNo}</td>
+            <td>${deposit.challanDate}</td>
+            <td>₹${deposit.creditAmount.toLocaleString()}</td>
+            <td>₹${deposit.creditAmount.toLocaleString()}</td>
+            <td>
+                <button class="btn btn-secondary" onclick="editDeposit(${deposit.id})">Edit</button>
+                <button class="btn btn-danger" onclick="deleteDeposit(${deposit.id})">Delete</button>
+            </td>
+        `;
+    });
+}
+
+function refreshPaymentRecords() {
+    const tbody = document.getElementById('payment-records-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+
+    payments.forEach((payment, index) => {
+        if (payment.challans && payment.challans.length > 0) {
+            payment.challans.forEach((challan, challanIndex) => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${index + 1}.${challanIndex + 1}</td>
+                    <td>${payment.agencyName}</td>
+                    <td>${payment.tenderNo}</td>
+                    <td>${payment.tvNo}</td>
+                    <td>${payment.tvDate}</td>
+                    <td>₹${payment.paymentAmount.toLocaleString()}</td>
+                    <td>${challan.challanNo}</td>
+                    <td>${challan.challanDate}</td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="editPayment(${payment.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deletePayment(${payment.id})">Delete</button>
+                    </td>
+                `;
+            });
+        }
+    });
+}
+
+// Populate dropdowns
+function populateDropdowns() {
+    const depositPan = document.getElementById('deposit-pan');
+    const paymentPan = document.getElementById('payment-pan');
+    const reportAgency = document.getElementById('report-agency');
+
+    if (depositPan) {
+        depositPan.innerHTML = '<option value="">Select PAN</option>';
+        agencies.forEach(agency => {
+            const option = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
+            depositPan.add(option);
+        });
+    }
+
+    if (paymentPan) {
+        paymentPan.innerHTML = '<option value="">Select PAN</option>';
+        agencies.forEach(agency => {
+            const option = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
+            paymentPan.add(option);
+        });
+    }
+
+    if (reportAgency) {
+        reportAgency.innerHTML = '<option value="">Select Agency</option>';
+        agencies.forEach(agency => {
+            const option = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
+            reportAgency.add(option);
+        });
+    }
+}
+
+function populateYearDropdown() {
+    const yearSelect = document.getElementById('report-year');
+    if (!yearSelect) return;
+    
+    const currentYear = new Date().getFullYear();
+    
+    // Add "Before 2015-16" option first
+    const beforeOption = new Option('Before 2015-16', 'before-2015');
+    yearSelect.add(beforeOption);
+    
+    // Add year options from 2015 onwards
+    for (let year = 2015; year <= currentYear; year++) {
+        const option = new Option(`${year}-${year + 1}`, year);
+        yearSelect.add(option);
+    }
+}
+
+// Initialize application when page loads
+window.onload = function() {
+    init();
+};
+
+// ===== AGENCY MANAGEMENT FUNCTIONS =====
 
 // PAN formatting function
 function formatPAN(input) {
@@ -337,7 +578,7 @@ function formatPAN(input) {
     input.value = value;
 }
 
-// Agency management
+// Agency management with real-time refresh
 function saveAgency() {
     // Check if user is authenticated
     if (!currentUser) {
@@ -374,9 +615,7 @@ function saveAgency() {
     };
 
     agencies.push(agency);
-    saveData();
-    refreshAgencyTable();
-    populateDropdowns();
+    saveData(); // This will trigger real-time sync
     clearAgencyForm();
     showAlert('Agency saved successfully', 'success');
 }
@@ -395,8 +634,7 @@ function editAgency(id) {
         
         // Remove from array for update
         agencies = agencies.filter(a => a.id !== id);
-        refreshAgencyTable();
-        populateDropdowns();
+        saveData(); // Save changes and trigger real-time sync
     }
 }
 
@@ -409,9 +647,7 @@ function deleteAgency(id) {
 
     if (confirm('Are you sure you want to delete this agency?')) {
         agencies = agencies.filter(a => a.id !== id);
-        saveData();
-        refreshAgencyTable();
-        populateDropdowns();
+        saveData(); // This will trigger real-time sync
         showAlert('Agency deleted successfully', 'success');
     }
 }
@@ -419,24 +655,6 @@ function deleteAgency(id) {
 function clearAgencyForm() {
     document.getElementById('agency-pan').value = '';
     document.getElementById('agency-name').value = '';
-}
-
-function refreshAgencyTable() {
-    const tbody = document.getElementById('agency-tbody');
-    tbody.innerHTML = '';
-
-    agencies.forEach((agency, index) => {
-        const row = tbody.insertRow();
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${agency.pan}</td>
-            <td>${agency.name}</td>
-            <td>
-                <button class="btn btn-secondary" onclick="editAgency(${agency.id})">Edit</button>
-                <button class="btn btn-danger" onclick="deleteAgency(${agency.id})">Delete</button>
-            </td>
-        `;
-    });
 }
 
 function searchAgencies() {
@@ -450,131 +668,15 @@ function searchAgencies() {
     }
 }
 
-// Populate dropdowns
-function populateDropdowns() {
-    const depositPan = document.getElementById('deposit-pan');
-    const paymentPan = document.getElementById('payment-pan');
-    const reportAgency = document.getElementById('report-agency');
+// ===== DEPOSIT MANAGEMENT FUNCTIONS =====
 
-    // Clear existing options
-    depositPan.innerHTML = '<option value="">Select PAN</option>';
-    paymentPan.innerHTML = '<option value="">Select PAN</option>';
-    reportAgency.innerHTML = '<option value="">Select Agency</option>';
-
-    agencies.forEach(agency => {
-        const option1 = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
-        const option2 = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
-        const option3 = new Option(`${agency.pan} - ${agency.name}`, agency.pan);
-        
-        depositPan.add(option1);
-        paymentPan.add(option2);
-        reportAgency.add(option3);
-    });
-}
-
-function populateYearDropdown() {
-    const yearSelect = document.getElementById('report-year');
-    const currentYear = new Date().getFullYear();
-    
-    // Add "Before 2015-16" option first
-    const beforeOption = new Option('Before 2015-16', 'before-2015');
-    yearSelect.add(beforeOption);
-    
-    // Add year options from 2015 onwards
-    for (let year = 2015; year <= currentYear; year++) {
-        const option = new Option(`${year}-${year + 1}`, year);
-        yearSelect.add(option);
-    }
-}
-
-// Deposit management
 function updateDepositAgencyName() {
     const pan = document.getElementById('deposit-pan').value;
     const agency = agencies.find(a => a.pan === pan);
     const nameField = document.getElementById('deposit-agency-name');
     
-    nameField.value = agency ? agency.name : '';
-}
-
-function toggleDepositFields() {
-    const nature = document.getElementById('deposit-nature').value;
-    const emdFields = document.getElementById('emd-fields');
-    const sdFields = document.getElementById('sd-fields');
-    const billNoField = document.getElementById('deposit-bill-no');
-    const billDateField = document.getElementById('deposit-bill-date');
-
-    emdFields.classList.add('hidden');
-    sdFields.classList.add('hidden');
-
-    if (nature === 'EMD') {
-        emdFields.classList.remove('hidden');
-        billNoField.value = 'NA';
-        billNoField.disabled = true;
-        billDateField.disabled = true;
-    } else if (nature === 'SD') {
-        sdFields.classList.remove('hidden');
-        billNoField.disabled = false;
-        billDateField.disabled = false;
-        billNoField.value = '';
-    } else {
-        billNoField.disabled = false;
-        billDateField.disabled = false;
-        billNoField.value = '';
-    }
-    
-    // Reset work completion fields when nature changes
-    document.getElementById('work-completed').value = '';
-    toggleWorkCompletionFields();
-}
-
-function toggleWorkCompletionFields() {
-    const workCompleted = document.getElementById('work-completed').value;
-    const billTypeGroup = document.getElementById('bill-type-group');
-    const sdCompletionDate = document.getElementById('sd-completion-date');
-    const sdDefectPeriod = document.getElementById('sd-defect-period');
-    
-    if (workCompleted === 'NO') {
-        // Show Bill Type field
-        billTypeGroup.style.display = 'block';
-        
-        // Hide SD completion fields
-        if (sdCompletionDate) {
-            sdCompletionDate.parentElement.style.display = 'none';
-            sdCompletionDate.value = '';
-        }
-        if (sdDefectPeriod) {
-            sdDefectPeriod.parentElement.style.display = 'none';
-            sdDefectPeriod.value = '';
-        }
-    } else if (workCompleted === 'YES') {
-        // Hide Bill Type field
-        billTypeGroup.style.display = 'none';
-        document.getElementById('bill-type').value = '';
-        
-        // Show SD completion fields if SD is selected
-        const nature = document.getElementById('deposit-nature').value;
-        if (nature === 'SD') {
-            if (sdCompletionDate) {
-                sdCompletionDate.parentElement.style.display = 'block';
-            }
-            if (sdDefectPeriod) {
-                sdDefectPeriod.parentElement.style.display = 'block';
-            }
-        }
-    } else {
-        // No selection - hide Bill Type and show default SD fields
-        billTypeGroup.style.display = 'none';
-        document.getElementById('bill-type').value = '';
-        
-        const nature = document.getElementById('deposit-nature').value;
-        if (nature === 'SD') {
-            if (sdCompletionDate) {
-                sdCompletionDate.parentElement.style.display = 'block';
-            }
-            if (sdDefectPeriod) {
-                sdDefectPeriod.parentElement.style.display = 'block';
-            }
-        }
+    if (nameField) {
+        nameField.value = agency ? agency.name : '';
     }
 }
 
@@ -602,9 +704,6 @@ function saveDeposit() {
         return;
     }
 
-    const workCompleted = document.getElementById('work-completed').value;
-    const billType = document.getElementById('bill-type').value;
-
     const deposit = {
         id: editingDepositId || Date.now(),
         pan: pan,
@@ -613,16 +712,11 @@ function saveDeposit() {
         nature: nature,
         billNo: billNo,
         billDate: billDate,
-        workCompleted: workCompleted,
-        billType: workCompleted === 'YES' ? 'Final' : (workCompleted === 'NO' ? billType : ''),
         tvNo: tvNo,
         tvDate: tvDate,
         creditAmount: parseFloat(creditAmount),
         challanNo: challanNo,
-        challanDate: challanDate,
-        emdSource: nature === 'EMD' ? document.getElementById('emd-source').value : '',
-        completionDate: (nature === 'SD' && workCompleted === 'YES') ? document.getElementById('sd-completion-date').value : '',
-        defectPeriod: (nature === 'SD' && workCompleted === 'YES') ? document.getElementById('sd-defect-period').value : ''
+        challanDate: challanDate
     };
 
     if (editingDepositId) {
@@ -639,226 +733,82 @@ function saveDeposit() {
         showAlert('Deposit saved successfully', 'success');
     }
 
-    saveData();
+    saveData(); // This will trigger real-time sync
     clearDepositForm();
-    resetDepositForm();
 }
 
 function clearDepositForm() {
-    document.getElementById('deposit-pan').value = '';
-    document.getElementById('deposit-agency-name').value = '';
-    document.getElementById('deposit-tender-no').value = '';
-    document.getElementById('deposit-nature').value = '';
-    document.getElementById('deposit-bill-no').value = '';
-    document.getElementById('deposit-bill-date').value = '';
-    document.getElementById('deposit-tv-no').value = '';
-    document.getElementById('deposit-tv-date').value = '';
-    document.getElementById('deposit-credit-amount').value = '';
-    document.getElementById('deposit-challan-no').value = '';
-    document.getElementById('deposit-challan-date').value = '';
-    document.getElementById('emd-source').value = '';
-    document.getElementById('sd-completion-date').value = '';
-    document.getElementById('sd-defect-period').value = '';
-    document.getElementById('work-completed').value = '';
-    document.getElementById('bill-type').value = '';
+    const fields = [
+        'deposit-pan', 'deposit-agency-name', 'deposit-tender-no', 'deposit-nature',
+        'deposit-bill-no', 'deposit-bill-date', 'deposit-tv-no', 'deposit-tv-date',
+        'deposit-credit-amount', 'deposit-challan-no', 'deposit-challan-date'
+    ];
     
-    document.getElementById('emd-fields').classList.add('hidden');
-    document.getElementById('sd-fields').classList.add('hidden');
-    document.getElementById('bill-type-group').style.display = 'none';
-    document.getElementById('deposit-bill-no').disabled = false;
-    document.getElementById('deposit-bill-date').disabled = false;
+    fields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) field.value = '';
+    });
 }
 
-function resetDepositForm() {
-    // Reset save button
-    const saveButton = document.querySelector('#record-deposits .btn[onclick="saveDeposit()"]');
-    if (saveButton) {
-        saveButton.textContent = 'Save Deposit';
-        saveButton.className = 'btn';
+function editDeposit(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to edit deposit data', 'error');
+        return;
     }
-    
-    // Remove cancel button if exists
-    const cancelButton = document.querySelector('#record-deposits .btn[onclick="cancelDepositEdit()"]');
-    if (cancelButton) {
-        cancelButton.remove();
+
+    const deposit = deposits.find(d => d.id === id);
+    if (!deposit) {
+        showAlert('Deposit not found', 'error');
+        return;
     }
+
+    // Set editing mode
+    editingDepositId = id;
     
-    editingDepositId = null;
+    // Switch to Record Deposits tab
+    openTab(null, 'record-deposits');
+    
+    // Populate form fields
+    document.getElementById('deposit-pan').value = deposit.pan;
+    document.getElementById('deposit-agency-name').value = deposit.agencyName;
+    document.getElementById('deposit-tender-no').value = deposit.tenderNo;
+    document.getElementById('deposit-nature').value = deposit.nature;
+    document.getElementById('deposit-bill-no').value = deposit.billNo || '';
+    document.getElementById('deposit-bill-date').value = deposit.billDate || '';
+    document.getElementById('deposit-tv-no').value = deposit.tvNo;
+    document.getElementById('deposit-tv-date').value = deposit.tvDate || '';
+    document.getElementById('deposit-credit-amount').value = deposit.creditAmount;
+    document.getElementById('deposit-challan-no').value = deposit.challanNo;
+    document.getElementById('deposit-challan-date').value = deposit.challanDate || '';
+    
+    showAlert('Editing deposit record. Make your changes and click "Save Deposit".', 'info');
 }
 
-function cancelDepositEdit() {
-    clearDepositForm();
-    resetDepositForm();
-    showAlert('Edit cancelled', 'info');
+function deleteDeposit(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to delete deposit data', 'error');
+        return;
+    }
+
+    if (confirm('Are you sure you want to delete this deposit?')) {
+        deposits = deposits.filter(d => d.id !== id);
+        saveData(); // This will trigger real-time sync
+        showAlert('Deposit deleted successfully', 'success');
+    }
 }
 
-// Payment management
+// ===== PAYMENT MANAGEMENT FUNCTIONS =====
+
 function updatePaymentAgencyName() {
     const pan = document.getElementById('payment-pan').value;
     const agency = agencies.find(a => a.pan === pan);
     const nameField = document.getElementById('payment-agency-name');
     
-    nameField.value = agency ? agency.name : '';
-    updateTenderDropdown();
-}
-
-function updateTenderDropdown() {
-    const pan = document.getElementById('payment-pan').value;
-    const tenderSelect = document.getElementById('payment-tender-no');
-    
-    tenderSelect.innerHTML = '<option value="">Select Tender Number</option>';
-    
-    const agencyDeposits = deposits.filter(d => d.pan === pan);
-    const uniqueTenders = [...new Set(agencyDeposits.map(d => d.tenderNo))];
-    
-    uniqueTenders.forEach(tender => {
-        const option = new Option(tender, tender);
-        tenderSelect.add(option);
-    });
-    
-    // Reset challan selection when tender dropdown changes
-    loadExistingChallans();
-}
-
-function loadExistingChallans() {
-    const pan = document.getElementById('payment-pan').value;
-    const tenderNo = document.getElementById('payment-tender-no').value;
-    
-    if (!pan || !tenderNo) {
-        hideAvailableChallans();
-        return;
+    if (nameField) {
+        nameField.value = agency ? agency.name : '';
     }
-    
-    // Find all deposits for the selected tender
-    const tenderDeposits = deposits.filter(d => d.pan === pan && d.tenderNo === tenderNo);
-    
-    if (tenderDeposits.length === 0) {
-        hideAvailableChallans();
-        return;
-    }
-    
-    // Populate available challans
-    const availableChallansList = document.getElementById('available-challans-list');
-    availableChallansList.innerHTML = '';
-    
-    tenderDeposits.forEach((deposit, index) => {
-        const challanOption = document.createElement('div');
-        challanOption.className = 'challan-option';
-        challanOption.innerHTML = `
-            <label>
-                <input type="checkbox" class="challan-checkbox" value="${index}" data-challan-no="${deposit.challanNo}" data-challan-date="${deposit.challanDate}">
-                <div class="challan-details">
-                    <div class="challan-number">${deposit.challanNo}</div>
-                    <div class="challan-date">Date: ${deposit.challanDate}</div>
-                </div>
-            </label>
-        `;
-        availableChallansList.appendChild(challanOption);
-    });
-    
-    // Show the "Select from Available Challans" button
-    const showButton = document.querySelector('#manual-challan-section .btn[onclick="showAvailableChallans()"]');
-    if (showButton) {
-        showButton.style.display = 'inline-block';
-    }
-}
-
-function showAvailableChallans() {
-    document.getElementById('available-challans-section').classList.remove('hidden');
-    document.getElementById('manual-challan-section').classList.add('hidden');
-}
-
-function hideAvailableChallans() {
-    document.getElementById('available-challans-section').classList.add('hidden');
-    document.getElementById('manual-challan-section').classList.remove('hidden');
-}
-
-function addSelectedChallans() {
-    const checkboxes = document.querySelectorAll('#available-challans-list input[type="checkbox"]:checked');
-    
-    if (checkboxes.length === 0) {
-        showAlert('Please select at least one challan', 'error');
-        return;
-    }
-    
-    // Clear existing challan container
-    const challanContainer = document.getElementById('challan-container');
-    challanContainer.innerHTML = '';
-    
-    // Add selected challans
-    checkboxes.forEach((checkbox, index) => {
-        const challanNo = checkbox.dataset.challanNo;
-        const challanDate = checkbox.dataset.challanDate;
-        
-        const challanEntry = document.createElement('div');
-        challanEntry.className = 'challan-entry';
-        challanEntry.innerHTML = `
-            <div class="form-group">
-                <label for="payment-challan-no-${index + 1}">Treasury Challan Number</label>
-                <input type="text" id="payment-challan-no-${index + 1}" placeholder="Enter Challan Number" value="${challanNo}">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-date-${index + 1}">Challan Date</label>
-                <input type="date" id="payment-challan-date-${index + 1}" value="${challanDate}">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-amount-${index + 1}">Payment amount against Challan (${index + 1})</label>
-                <input type="number" id="payment-challan-amount-${index + 1}" placeholder="Enter Payment Amount" onchange="calculateTotalPayment()">
-            </div>
-            ${index === 0 ? '<button class="btn btn-secondary" onclick="addChallanEntry()">Add Challan</button>' : '<button class="btn btn-danger" onclick="removeChallanEntry(this)">Remove</button>'}
-        `;
-        challanContainer.appendChild(challanEntry);
-    });
-    
-    // Update challan counter
-    challanCounter = checkboxes.length;
-    
-    // Hide available challans section
-    hideAvailableChallans();
-    
-    showAlert(`${checkboxes.length} challan(s) added successfully`, 'success');
-}
-
-function addChallanEntry() {
-    challanCounter++;
-    const container = document.getElementById('challan-container');
-    
-    const challanEntry = document.createElement('div');
-    challanEntry.className = 'challan-entry';
-    challanEntry.innerHTML = `
-        <div class="form-group">
-            <label for="payment-challan-no-${challanCounter}">Treasury Challan Number</label>
-            <input type="text" id="payment-challan-no-${challanCounter}" placeholder="Enter Challan Number">
-        </div>
-        <div class="form-group">
-            <label for="payment-challan-date-${challanCounter}">Challan Date</label>
-            <input type="date" id="payment-challan-date-${challanCounter}">
-        </div>
-        <div class="form-group">
-            <label for="payment-challan-amount-${challanCounter}">Payment amount against Challan (${challanCounter})</label>
-            <input type="number" id="payment-challan-amount-${challanCounter}" placeholder="Enter Payment Amount" onchange="calculateTotalPayment()">
-        </div>
-        <button class="btn btn-danger" onclick="removeChallanEntry(this)">Remove</button>
-    `;
-    
-    container.appendChild(challanEntry);
-}
-
-function removeChallanEntry(button) {
-    button.parentElement.remove();
-    calculateTotalPayment();
-}
-
-function calculateTotalPayment() {
-    const challanAmountInputs = document.querySelectorAll('input[id^="payment-challan-amount-"]');
-    let total = 0;
-    
-    challanAmountInputs.forEach(input => {
-        const value = parseFloat(input.value) || 0;
-        total += value;
-    });
-    
-    document.getElementById('payment-amount').value = total;
 }
 
 function savePayment() {
@@ -880,30 +830,6 @@ function savePayment() {
         return;
     }
 
-    // Collect all challan entries
-    const challanEntries = [];
-    const challanContainer = document.getElementById('challan-container');
-    const challanInputs = challanContainer.querySelectorAll('.challan-entry');
-    
-    challanInputs.forEach((entry, index) => {
-        const challanNo = entry.querySelector(`input[id*="challan-no"]`).value;
-        const challanDate = entry.querySelector(`input[id*="challan-date"]`).value;
-        const challanAmount = entry.querySelector(`input[id*="challan-amount"]`).value;
-        
-        if (challanNo && challanDate && challanAmount) {
-            challanEntries.push({
-                challanNo: challanNo,
-                challanDate: challanDate,
-                challanAmount: parseFloat(challanAmount)
-            });
-        }
-    });
-
-    if (challanEntries.length === 0) {
-        showAlert('Please add at least one challan entry with all required fields', 'error');
-        return;
-    }
-
     const payment = {
         id: editingPaymentId || Date.now(),
         pan: pan,
@@ -912,7 +838,13 @@ function savePayment() {
         paymentAmount: parseFloat(paymentAmount),
         tvNo: tvNo,
         tvDate: tvDate,
-        challans: challanEntries
+        challans: [
+            {
+                challanNo: document.getElementById('payment-challan-no-1')?.value || '',
+                challanDate: document.getElementById('payment-challan-date-1')?.value || '',
+                challanAmount: parseFloat(document.getElementById('payment-challan-amount-1')?.value || 0)
+            }
+        ]
     };
 
     if (editingPaymentId) {
@@ -929,227 +861,20 @@ function savePayment() {
         showAlert('Payment saved successfully', 'success');
     }
 
-    saveData();
+    saveData(); // This will trigger real-time sync
     clearPaymentForm();
-    resetPaymentForm();
 }
 
 function clearPaymentForm() {
-    document.getElementById('payment-pan').value = '';
-    document.getElementById('payment-agency-name').value = '';
-    document.getElementById('payment-tender-no').value = '';
-    document.getElementById('payment-amount').value = '';
-    document.getElementById('payment-tv-no').value = '';
-    document.getElementById('payment-tv-date').value = '';
+    const fields = [
+        'payment-pan', 'payment-agency-name', 'payment-tender-no',
+        'payment-amount', 'payment-tv-no', 'payment-tv-date'
+    ];
     
-    // Reset challan container
-    const container = document.getElementById('challan-container');
-    container.innerHTML = `
-        <div class="challan-entry">
-            <div class="form-group">
-                <label for="payment-challan-no-1">Treasury Challan Number</label>
-                <input type="text" id="payment-challan-no-1" placeholder="Enter Challan Number">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-date-1">Challan Date</label>
-                <input type="date" id="payment-challan-date-1">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-amount-1">Payment amount against Challan (1)</label>
-                <input type="number" id="payment-challan-amount-1" placeholder="Enter Payment Amount" onchange="calculateTotalPayment()">
-            </div>
-            <button class="btn btn-secondary" onclick="addChallanEntry()">Add Challan</button>
-        </div>
-    `;
-    challanCounter = 1;
-    
-    // Hide available challans section and show manual entry
-    hideAvailableChallans();
-    
-    // Hide the "Select from Available Challans" button
-    const showButton = document.querySelector('#manual-challan-section .btn[onclick="showAvailableChallans()"]');
-    if (showButton) {
-        showButton.style.display = 'none';
-    }
-}
-
-function resetPaymentForm() {
-    // Reset save button
-    const saveButton = document.querySelector('#record-payments .btn[onclick="savePayment()"]');
-    if (saveButton) {
-        saveButton.textContent = 'Save Payment';
-        saveButton.className = 'btn';
-    }
-    
-    // Remove cancel button if exists
-    const cancelButton = document.querySelector('#record-payments .btn[onclick="cancelPaymentEdit()"]');
-    if (cancelButton) {
-        cancelButton.remove();
-    }
-    
-    editingPaymentId = null;
-}
-
-function cancelPaymentEdit() {
-    clearPaymentForm();
-    resetPaymentForm();
-    showAlert('Edit cancelled', 'info');
-}
-
-// View records
-function refreshRecordTables() {
-    refreshDepositRecords();
-    refreshPaymentRecords();
-}
-
-function refreshDepositRecords() {
-    const tbody = document.getElementById('deposit-records-tbody');
-    tbody.innerHTML = '';
-
-    deposits.forEach((deposit, index) => {
-        const row = tbody.insertRow();
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${deposit.agencyName}</td>
-            <td>${deposit.tenderNo}</td>
-            <td>${deposit.billType || 'N/A'}</td>
-            <td>${deposit.nature}</td>
-            <td>${deposit.tvNo}</td>
-            <td>${deposit.challanNo}</td>
-            <td>${deposit.challanDate}</td>
-            <td>₹${deposit.creditAmount.toLocaleString()}</td>
-            <td>
-                <button class="btn btn-secondary" onclick="editDeposit(${deposit.id})">Edit</button>
-                <button class="btn btn-danger" onclick="deleteDeposit(${deposit.id})">Delete</button>
-            </td>
-        `;
+    fields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) field.value = '';
     });
-}
-
-function refreshPaymentRecords() {
-    const tbody = document.getElementById('payment-records-tbody');
-    tbody.innerHTML = '';
-
-    payments.forEach((payment, index) => {
-        payment.challans.forEach((challan, challanIndex) => {
-            const row = tbody.insertRow();
-            row.innerHTML = `
-                <td>${index + 1}.${challanIndex + 1}</td>
-                <td>${payment.agencyName}</td>
-                <td>${payment.tenderNo}</td>
-                <td>${challan.challanNo}</td>
-                <td>${challan.challanDate}</td>
-                <td>₹${(challan.challanAmount || 0).toLocaleString()}</td>
-                <td>${payment.tvNo}</td>
-                <td>${payment.tvDate}</td>
-                <td>
-                    <button class="btn btn-secondary" onclick="editPayment(${payment.id})">Edit</button>
-                    <button class="btn btn-danger" onclick="deletePayment(${payment.id})">Delete</button>
-                </td>
-            `;
-        });
-    });
-}
-
-function searchDeposits() {
-    const searchTerm = document.getElementById('deposit-search').value.toLowerCase();
-    const tbody = document.getElementById('deposit-records-tbody');
-    const rows = tbody.getElementsByTagName('tr');
-
-    for (let row of rows) {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-    }
-}
-
-function searchPayments() {
-    const searchTerm = document.getElementById('payment-search').value.toLowerCase();
-    const tbody = document.getElementById('payment-records-tbody');
-    const rows = tbody.getElementsByTagName('tr');
-
-    for (let row of rows) {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-    }
-}
-
-function editDeposit(id) {
-    // Check if user is authenticated
-    if (!currentUser) {
-        showAlert('Please login to edit deposit data', 'error');
-        return;
-    }
-
-    const deposit = deposits.find(d => d.id === id);
-    if (!deposit) {
-        showAlert('Deposit not found', 'error');
-        return;
-    }
-
-    // Set editing mode
-    editingDepositId = id;
-    
-    // Switch to Record Deposits tab
-    openTab('record-deposits');
-    
-    // Populate form fields
-    document.getElementById('deposit-pan').value = deposit.pan;
-    document.getElementById('deposit-agency-name').value = deposit.agencyName;
-    document.getElementById('deposit-tender-no').value = deposit.tenderNo;
-    document.getElementById('deposit-nature').value = deposit.nature;
-    document.getElementById('deposit-bill-no').value = deposit.billNo;
-    document.getElementById('deposit-bill-date').value = deposit.billDate;
-    document.getElementById('work-completed').value = deposit.workCompleted || '';
-    document.getElementById('bill-type').value = deposit.billType || '';
-    document.getElementById('deposit-tv-no').value = deposit.tvNo;
-    document.getElementById('deposit-tv-date').value = deposit.tvDate;
-    document.getElementById('deposit-credit-amount').value = deposit.creditAmount;
-    document.getElementById('deposit-challan-no').value = deposit.challanNo;
-    document.getElementById('deposit-challan-date').value = deposit.challanDate;
-    
-    // Handle nature-specific fields
-    toggleDepositFields();
-    
-    if (deposit.nature === 'EMD') {
-        document.getElementById('emd-source').value = deposit.emdSource;
-    } else if (deposit.nature === 'SD') {
-        document.getElementById('sd-completion-date').value = deposit.completionDate;
-        document.getElementById('sd-defect-period').value = deposit.defectPeriod;
-    }
-    
-    // Handle work completion fields
-    toggleWorkCompletionFields();
-    
-    // Update save button text
-    const saveButton = document.querySelector('#record-deposits .btn[onclick="saveDeposit()"]');
-    saveButton.textContent = 'Update Deposit';
-    saveButton.className = 'btn btn-success';
-    
-    // Add cancel button if not exists
-    if (!document.querySelector('#record-deposits .btn[onclick="cancelDepositEdit()"]')) {
-        const cancelButton = document.createElement('button');
-        cancelButton.className = 'btn btn-secondary';
-        cancelButton.textContent = 'Cancel Edit';
-        cancelButton.onclick = cancelDepositEdit;
-        saveButton.parentNode.insertBefore(cancelButton, saveButton.nextSibling);
-    }
-    
-    showAlert('Editing deposit record. Make your changes and click "Update Deposit".', 'info');
-}
-
-function deleteDeposit(id) {
-    // Check if user is authenticated
-    if (!currentUser) {
-        showAlert('Please login to delete deposit data', 'error');
-        return;
-    }
-
-    if (confirm('Are you sure you want to delete this deposit?')) {
-        deposits = deposits.filter(d => d.id !== id);
-        saveData();
-        refreshDepositRecords();
-        showAlert('Deposit deleted successfully', 'success');
-    }
 }
 
 function editPayment(id) {
@@ -1169,64 +894,17 @@ function editPayment(id) {
     editingPaymentId = id;
     
     // Switch to Record Payments tab
-    openTab('record-payments');
+    openTab(null, 'record-payments');
     
     // Populate form fields
     document.getElementById('payment-pan').value = payment.pan;
     document.getElementById('payment-agency-name').value = payment.agencyName;
-    document.getElementById('payment-tender-no').innerHTML = `<option value="${payment.tenderNo}">${payment.tenderNo}</option>`;
     document.getElementById('payment-tender-no').value = payment.tenderNo;
     document.getElementById('payment-amount').value = payment.paymentAmount;
     document.getElementById('payment-tv-no').value = payment.tvNo;
-    document.getElementById('payment-tv-date').value = payment.tvDate;
+    document.getElementById('payment-tv-date').value = payment.tvDate || '';
     
-    // Populate challan entries
-    const challanContainer = document.getElementById('challan-container');
-    challanContainer.innerHTML = '';
-    
-    payment.challans.forEach((challan, index) => {
-        const challanEntry = document.createElement('div');
-        challanEntry.className = 'challan-entry';
-        challanEntry.innerHTML = `
-            <div class="form-group">
-                <label for="payment-challan-no-${index + 1}">Treasury Challan Number</label>
-                <input type="text" id="payment-challan-no-${index + 1}" placeholder="Enter Challan Number" value="${challan.challanNo}">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-date-${index + 1}">Challan Date</label>
-                <input type="date" id="payment-challan-date-${index + 1}" value="${challan.challanDate}">
-            </div>
-            <div class="form-group">
-                <label for="payment-challan-amount-${index + 1}">Payment amount against Challan (${index + 1})</label>
-                <input type="number" id="payment-challan-amount-${index + 1}" placeholder="Enter Payment Amount" value="${challan.challanAmount || ''}" onchange="calculateTotalPayment()">
-            </div>
-            ${index === 0 ? '<button class="btn btn-secondary" onclick="addChallanEntry()">Add Challan</button>' : '<button class="btn btn-danger" onclick="removeChallanEntry(this)">Remove</button>'}
-        `;
-        challanContainer.appendChild(challanEntry);
-    });
-    
-    challanCounter = payment.challans.length;
-    
-    // Calculate total payment amount
-    setTimeout(() => {
-        calculateTotalPayment();
-    }, 100);
-    
-    // Update save button text
-    const saveButton = document.querySelector('#record-payments .btn[onclick="savePayment()"]');
-    saveButton.textContent = 'Update Payment';
-    saveButton.className = 'btn btn-success';
-    
-    // Add cancel button if not exists
-    if (!document.querySelector('#record-payments .btn[onclick="cancelPaymentEdit()"]')) {
-        const cancelButton = document.createElement('button');
-        cancelButton.className = 'btn btn-secondary';
-        cancelButton.textContent = 'Cancel Edit';
-        cancelButton.onclick = cancelPaymentEdit;
-        saveButton.parentNode.insertBefore(cancelButton, saveButton.nextSibling);
-    }
-    
-    showAlert('Editing payment record. Make your changes and click "Update Payment".', 'info');
+    showAlert('Editing payment record. Make your changes and click "Save Payment".', 'info');
 }
 
 function deletePayment(id) {
@@ -1238,117 +916,38 @@ function deletePayment(id) {
 
     if (confirm('Are you sure you want to delete this payment?')) {
         payments = payments.filter(p => p.id !== id);
-        saveData();
-        refreshPaymentRecords();
+        saveData(); // This will trigger real-time sync
         showAlert('Payment deleted successfully', 'success');
     }
 }
 
-// Export functions
-function exportDeposits() {
-    // Check if user is authenticated
-    if (!currentUser) {
-        showAlert('Please login to export data', 'error');
-        return;
-    }
+// ===== SEARCH FUNCTIONS =====
 
-    const csv = generateDepositCSV();
-    downloadCSV(csv, 'deposits.csv');
-    showAlert('Deposits exported successfully', 'success');
-}
-
-function exportPayments() {
-    // Check if user is authenticated
-    if (!currentUser) {
-        showAlert('Please login to export data', 'error');
-        return;
-    }
-
-    const csv = generatePaymentCSV();
-    downloadCSV(csv, 'payments.csv');
-    showAlert('Payments exported successfully', 'success');
-}
-
-function generateDepositCSV() {
-    const headers = ['Sl. No.', 'Agency Name', 'Tender No.', 'Type', 'TV Number', 'Treasury Challan No.', 'Challan Date', 'Amount'];
-    const rows = deposits.map((deposit, index) => [
-        index + 1,
-        deposit.agencyName,
-        deposit.tenderNo,
-        deposit.nature,
-        deposit.tvNo,
-        deposit.challanNo,
-        deposit.challanDate,
-        deposit.creditAmount
-    ]);
+function searchDeposits() {
+    const searchTerm = document.getElementById('deposit-search')?.value.toLowerCase() || '';
+    const tbody = document.getElementById('deposit-records-tbody');
+    if (!tbody) return;
     
-    return [headers, ...rows].map(row => row.join(',')).join('\n');
-}
-
-function generatePaymentCSV() {
-    const headers = ['Sl. No.', 'Agency Name', 'Tender No.', 'Treasury Challan No.', 'Challan Date', 'Amount', 'TV Number', 'TV Date'];
-    const rows = [];
-    
-    payments.forEach((payment, index) => {
-        payment.challans.forEach((challan, challanIndex) => {
-            rows.push([
-                `${index + 1}.${challanIndex + 1}`,
-                payment.agencyName,
-                payment.tenderNo,
-                challan.challanNo,
-                challan.challanDate,
-                payment.paymentAmount,
-                payment.tvNo,
-                payment.tvDate
-            ]);
-        });
-    });
-    
-    return [headers, ...rows].map(row => row.join(',')).join('\n');
-}
-
-function downloadCSV(csv, filename) {
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-}
-
-// Handle year selection to auto-populate date ranges
-function handleYearSelection() {
-    const yearSelect = document.getElementById('report-year');
-    const fromDateInput = document.getElementById('report-from-date');
-    const toDateInput = document.getElementById('report-to-date');
-    const selectedYear = yearSelect.value;
-
-    if (selectedYear === 'before-2015') {
-        // Set date range for "Before 2015-16" (up to March 31, 2015)
-        fromDateInput.value = '2000-04-01'; // Start from a reasonable old date
-        toDateInput.value = '2015-03-31';   // End before 2015-16 financial year
-    } else if (selectedYear && selectedYear !== '') {
-        // Set financial year dates (April 1 to March 31)
-        const startYear = parseInt(selectedYear);
-        const endYear = startYear + 1;
-        fromDateInput.value = `${startYear}-04-01`;
-        toDateInput.value = `${endYear}-03-31`;
-    }
-    // If no year selected, leave date fields as they are
-}
-
-// Reports
-function toggleReportFields() {
-    const reportType = document.getElementById('report-type').value;
-    const agencyGroup = document.getElementById('agency-select-group');
-    
-    if (reportType === 'AGENCY') {
-        agencyGroup.style.display = 'block';
-    } else {
-        agencyGroup.style.display = 'none';
+    const rows = tbody.getElementsByTagName('tr');
+    for (let row of rows) {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
     }
 }
+
+function searchPayments() {
+    const searchTerm = document.getElementById('payment-search')?.value.toLowerCase() || '';
+    const tbody = document.getElementById('payment-records-tbody');
+    if (!tbody) return;
+    
+    const rows = tbody.getElementsByTagName('tr');
+    for (let row of rows) {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    }
+}
+
+// ===== REPORT GENERATION FUNCTIONS =====
 
 function generateReport() {
     // Check if user is authenticated
@@ -1373,7 +972,7 @@ function generateReport() {
     let filteredPayments = payments;
 
     // Filter by agency if selected
-    if (reportType === 'AGENCY' && selectedAgency) {
+    if (selectedAgency) {
         filteredDeposits = deposits.filter(d => d.pan === selectedAgency);
         filteredPayments = payments.filter(p => p.pan === selectedAgency);
     }
@@ -1389,169 +988,153 @@ function generateReport() {
         return paymentDate >= new Date(fromDate) && paymentDate <= new Date(toDate);
     });
 
-    if (format === 'ABSTRACT') {
-        generateAbstractReport(filteredDeposits, filteredPayments, fromDate);
+    // Generate report based on type
+    if (reportType === 'summary') {
+        generateSummaryReport(filteredDeposits, filteredPayments);
     } else {
         generateDetailedReport(filteredDeposits, filteredPayments);
     }
-
-    document.getElementById('report-results').classList.remove('hidden');
 }
 
-function generateAbstractReport(filteredDeposits, filteredPayments, fromDate) {
-    // Calculate opening balance (deposits before date range)
-    const openingDeposits = deposits.filter(d => new Date(d.challanDate) < new Date(fromDate));
-    const openingPayments = payments.filter(p => new Date(p.tvDate) < new Date(fromDate));
-    
-    const openingBalance = openingDeposits.reduce((sum, d) => sum + d.creditAmount, 0) - 
-                         openingPayments.reduce((sum, p) => sum + p.paymentAmount, 0);
+function generateSummaryReport(deposits, payments) {
+    const reportTable = document.getElementById('report-table');
+    reportTable.innerHTML = '';
 
-    const totalCredit = filteredDeposits.reduce((sum, d) => sum + d.creditAmount, 0);
-    const totalPayment = filteredPayments.reduce((sum, p) => sum + p.paymentAmount, 0);
-    const balance = openingBalance + totalCredit - totalPayment;
-
-    // Update summary cards
-    document.getElementById('opening-balance').textContent = `₹${openingBalance.toLocaleString()}`;
-    document.getElementById('total-credit').textContent = `₹${totalCredit.toLocaleString()}`;
-    document.getElementById('total-payment').textContent = `₹${totalPayment.toLocaleString()}`;
-    document.getElementById('closing-balance').textContent = `₹${balance.toLocaleString()}`;
-
-    // Generate abstract table
-    const thead = document.getElementById('report-thead');
-    const tbody = document.getElementById('report-tbody');
-    
-    thead.innerHTML = `
-        <tr>
-            <th>Opening Balance</th>
-            <th>Credit Amount</th>
-            <th>Payment Amount</th>
-            <th>Closing Balance</th>
-        </tr>
-    `;
-
-    tbody.innerHTML = `
-        <tr>
-            <td>₹${openingBalance.toLocaleString()}</td>
-            <td>₹${totalCredit.toLocaleString()}</td>
-            <td>₹${totalPayment.toLocaleString()}</td>
-            <td>₹${balance.toLocaleString()}</td>
-        </tr>
-    `;
-    
-    // Add data attributes for export purposes
-    const abstractRow = tbody.rows[0];
-    abstractRow.cells[0].setAttribute('data-export-value', openingBalance);
-    abstractRow.cells[1].setAttribute('data-export-value', totalCredit);
-    abstractRow.cells[2].setAttribute('data-export-value', totalPayment);
-    abstractRow.cells[3].setAttribute('data-export-value', balance);
-}
-
-function generateDetailedReport(filteredDeposits, filteredPayments) {
-    const thead = document.getElementById('report-thead');
-    const tbody = document.getElementById('report-tbody');
-    
-    thead.innerHTML = `
-        <tr>
-            <th>Sl. No.</th>
-            <th>Agency Name</th>
-            <th>Tender No.</th>
-            <th>Credit Amount</th>
-            <th>Payment Amount</th>
-            <th>T.V. No.</th>
-            <th>Date</th>
-        </tr>
-    `;
-
-    tbody.innerHTML = '';
-    let totalCredit = 0;
-    let totalPayment = 0;
-    
-    // Combine all records with type and date information
-    const allRecords = [];
-    
-    // Add deposit records
-    filteredDeposits.forEach(deposit => {
-        allRecords.push({
-            type: 'DEPOSIT',
-            agencyName: deposit.agencyName,
-            tenderNo: deposit.tenderNo,
-            depositType: deposit.nature, // EMD/SD
-            creditAmount: deposit.creditAmount,
-            paymentAmount: 0,
-            tvNo: deposit.tvNo,
-            tvDate: deposit.tvDate,
-            displayDate: deposit.challanDate,
-            challanNo: deposit.challanNo || '' // Add challan number for export
-        });
-        totalCredit += deposit.creditAmount;
+    // Create header
+    const header = reportTable.createTHead();
+    const headerRow = header.insertRow();
+    ['Agency', 'Total Deposits', 'Total Payments', 'Balance'].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
     });
 
-    // Add payment records
-    filteredPayments.forEach(payment => {
-        allRecords.push({
-            type: 'PAYMENT',
-            agencyName: payment.agencyName,
-            tenderNo: payment.tenderNo,
-            depositType: '', // Not applicable for payments
-            creditAmount: 0,
-            paymentAmount: payment.paymentAmount,
-            tvNo: payment.tvNo,
-            tvDate: payment.tvDate,
-            displayDate: payment.tvDate,
-            challanNo: '' // Empty for payments
-        });
-        totalPayment += payment.paymentAmount;
+    // Group data by agency
+    const agencyData = {};
+    
+    deposits.forEach(deposit => {
+        if (!agencyData[deposit.pan]) {
+            agencyData[deposit.pan] = {
+                name: deposit.agencyName,
+                totalDeposits: 0,
+                totalPayments: 0
+            };
+        }
+        agencyData[deposit.pan].totalDeposits += deposit.creditAmount;
     });
 
-    // Sort all records by TV date chronologically
-    allRecords.sort((a, b) => {
-        const dateA = new Date(a.tvDate || a.displayDate);
-        const dateB = new Date(b.tvDate || b.displayDate);
-        return dateA - dateB;
+    payments.forEach(payment => {
+        if (!agencyData[payment.pan]) {
+            agencyData[payment.pan] = {
+                name: payment.agencyName,
+                totalDeposits: 0,
+                totalPayments: 0
+            };
+        }
+        agencyData[payment.pan].totalPayments += payment.paymentAmount;
     });
 
-    // Add sorted records to table
-    allRecords.forEach((record, index) => {
+    // Create table body
+    const tbody = reportTable.createTBody();
+    Object.keys(agencyData).forEach(pan => {
+        const data = agencyData[pan];
         const row = tbody.insertRow();
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${record.agencyName}</td>
-            <td>${record.tenderNo}</td>
-            <td>${record.creditAmount > 0 ? '₹' + record.creditAmount.toLocaleString() : '-'}</td>
-            <td>${record.paymentAmount > 0 ? '₹' + record.paymentAmount.toLocaleString() : '-'}</td>
-            <td>${record.tvNo}</td>
-            <td>${record.displayDate}</td>
-        `;
+        const balance = data.totalDeposits - data.totalPayments;
         
-        // Add data attributes for export purposes (including hidden data)
-        row.cells[3].setAttribute('data-export-value', record.creditAmount > 0 ? record.creditAmount : '0');
-        row.cells[4].setAttribute('data-export-value', record.paymentAmount > 0 ? record.paymentAmount : '0');
-        row.setAttribute('data-challan-no', record.challanNo || ''); // Hidden challan number
-        row.setAttribute('data-type', record.type === 'DEPOSIT' ? record.depositType : 'PAYMENT'); // Hidden type
+        row.innerHTML = `
+            <td>${data.name}</td>
+            <td>₹${data.totalDeposits.toLocaleString()}</td>
+            <td>₹${data.totalPayments.toLocaleString()}</td>
+            <td>₹${balance.toLocaleString()}</td>
+        `;
+    });
+}
+
+function generateDetailedReport(deposits, payments) {
+    const reportTable = document.getElementById('report-table');
+    reportTable.innerHTML = '';
+
+    // Create header
+    const header = reportTable.createTHead();
+    const headerRow = header.insertRow();
+    ['Date', 'Agency', 'Type', 'Description', 'Debit', 'Credit', 'Balance'].forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
     });
 
-    // Add total row
-    const totalRow = tbody.insertRow();
-    totalRow.innerHTML = `
-        <td></td>
-        <td></td>
-        <td><strong>Total</strong></td>
-        <td><strong>₹${totalCredit.toLocaleString()}</strong></td>
-        <td><strong>₹${totalPayment.toLocaleString()}</strong></td>
-        <td></td>
-        <td></td>
-    `;
+    // Combine and sort all transactions
+    const allTransactions = [];
     
-    // Add data attributes for export purposes
-    totalRow.cells[3].setAttribute('data-export-value', totalCredit);
-    totalRow.cells[4].setAttribute('data-export-value', totalPayment);
-    totalRow.setAttribute('data-challan-no', ''); // Empty challan for total row
-    totalRow.setAttribute('data-type', ''); // Empty type for total row
+    deposits.forEach(deposit => {
+        allTransactions.push({
+            date: deposit.challanDate,
+            agency: deposit.agencyName,
+            type: 'Deposit',
+            description: `${deposit.nature} - ${deposit.challanNo}`,
+            debit: 0,
+            credit: deposit.creditAmount
+        });
+    });
 
-    // Update summary cards
-    document.getElementById('total-credit').textContent = `₹${totalCredit.toLocaleString()}`;
-    document.getElementById('total-payment').textContent = `₹${totalPayment.toLocaleString()}`;
-    document.getElementById('closing-balance').textContent = `₹${(totalCredit - totalPayment).toLocaleString()}`;
+    payments.forEach(payment => {
+        allTransactions.push({
+            date: payment.tvDate,
+            agency: payment.agencyName,
+            type: 'Payment',
+            description: `Payment - ${payment.tvNo}`,
+            debit: payment.paymentAmount,
+            credit: 0
+        });
+    });
+
+    // Sort by date
+    allTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Create table body with running balance
+    const tbody = reportTable.createTBody();
+    let runningBalance = 0;
+    
+    allTransactions.forEach(transaction => {
+        runningBalance += transaction.credit - transaction.debit;
+        const row = tbody.insertRow();
+        
+        row.innerHTML = `
+            <td>${transaction.date}</td>
+            <td>${transaction.agency}</td>
+            <td>${transaction.type}</td>
+            <td>${transaction.description}</td>
+            <td>${transaction.debit ? '₹' + transaction.debit.toLocaleString() : ''}</td>
+            <td>${transaction.credit ? '₹' + transaction.credit.toLocaleString() : ''}</td>
+            <td>₹${runningBalance.toLocaleString()}</td>
+        `;
+    });
+}
+
+// ===== EXPORT FUNCTIONS =====
+
+function exportDeposits() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to export data', 'error');
+        return;
+    }
+
+    const csv = generateDepositCSV();
+    downloadCSV(csv, 'deposits.csv');
+    showAlert('Deposits exported successfully', 'success');
+}
+
+function exportPayments() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to export data', 'error');
+        return;
+    }
+
+    const csv = generatePaymentCSV();
+    downloadCSV(csv, 'payments.csv');
+    showAlert('Payments exported successfully', 'success');
 }
 
 function exportReport() {
@@ -1568,96 +1151,173 @@ function exportReport() {
     showAlert('Report exported successfully as ' + filename, 'success');
 }
 
+function generateDepositCSV() {
+    const headers = ['S.No', 'Agency Name', 'Tender No', 'Nature', 'TV No', 'Challan No', 'Challan Date', 'Credit Amount'];
+    let csv = headers.join(',') + '\n';
+    
+    deposits.forEach((deposit, index) => {
+        const row = [
+            index + 1,
+            deposit.agencyName,
+            deposit.tenderNo,
+            deposit.nature,
+            deposit.tvNo,
+            deposit.challanNo,
+            deposit.challanDate,
+            deposit.creditAmount
+        ];
+        csv += row.join(',') + '\n';
+    });
+    
+    return csv;
+}
+
+function generatePaymentCSV() {
+    const headers = ['S.No', 'Agency Name', 'Tender No', 'TV No', 'TV Date', 'Payment Amount'];
+    let csv = headers.join(',') + '\n';
+    
+    payments.forEach((payment, index) => {
+        const row = [
+            index + 1,
+            payment.agencyName,
+            payment.tenderNo,
+            payment.tvNo,
+            payment.tvDate,
+            payment.paymentAmount
+        ];
+        csv += row.join(',') + '\n';
+    });
+    
+    return csv;
+}
+
 function tableToCSV(table) {
-    const rows = Array.from(table.rows);
-    return rows.map((row, rowIndex) => {
-        const cells = Array.from(row.cells);
+    let csv = '';
+    const rows = table.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td, th');
+        const rowData = Array.from(cols).map(col => col.textContent);
+        csv += rowData.join(',') + '\n';
+    });
+    
+    return csv;
+}
+
+function downloadCSV(csv, filename) {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', filename);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ===== PASSWORD RESET FUNCTIONALITY =====
+
+function sendPasswordReset() {
+    const email = document.getElementById("resetEmail").value.trim();
+    const resetBtn = document.getElementById("reset-btn");
+    const resetStatus = document.getElementById("reset-status");
+    
+    if (!email) {
+        showResetStatus("Please enter your email address.", "error");
+        return;
+    }
+
+    // Validate email format
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+        showResetStatus("Please enter a valid email address.", "error");
+        return;
+    }
+
+    // Show loading state
+    resetBtn.disabled = true;
+    resetBtn.textContent = "⏳ Sending...";
+    showResetStatus("Sending password reset email...", "info");
+
+    auth.sendPasswordResetEmail(email)
+        .then(() => {
+            showResetStatus("✅ Password reset email sent! Check your inbox and spam folder.", "success");
+            document.getElementById("resetEmail").value = "";
+            
+            // Hide the reset section after successful send
+            setTimeout(() => {
+                const container = document.getElementById("forgot-password-container");
+                if (container) {
+                    container.style.display = "none";
+                }
+            }, 3000);
+        })
+        .catch(error => {
+            console.error("❌ Password reset error:", error);
+            
+            let errorMessage = "❌ ";
+            switch (error.code) {
+                case 'auth/user-not-found':
+                    errorMessage += "No account found with this email address.";
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage += "Invalid email address format.";
+                    break;
+                case 'auth/too-many-requests':
+                    errorMessage += "Too many reset attempts. Please try again later.";
+                    break;
+                default:
+                    errorMessage += error.message;
+            }
+            
+            showResetStatus(errorMessage, "error");
+        })
+        .finally(() => {
+            // Restore button state
+            resetBtn.disabled = false;
+            resetBtn.textContent = "📧 Send Reset Link";
+        });
+}
+
+function showResetStatus(message, type) {
+    const resetStatus = document.getElementById("reset-status");
+    if (resetStatus) {
+        resetStatus.textContent = message;
+        resetStatus.className = `reset-status-message ${type}`;
         
-        // Handle header row - add hidden columns
-        if (rowIndex === 0) {
-            const headerCells = cells.map(cell => cell.textContent.trim());
-            // Insert Treasury Challan No. after Tender No. (index 2)
-            headerCells.splice(3, 0, 'Treasury Challan No.');
-            // Insert Type after Treasury Challan No. (index 3, now 4)
-            headerCells.splice(4, 0, 'Type');
-            return headerCells.join(',');
+        // Set colors based on type
+        switch (type) {
+            case 'success':
+                resetStatus.style.color = '#28a745';
+                break;
+            case 'error':
+                resetStatus.style.color = '#dc3545';
+                break;
+            case 'info':
+                resetStatus.style.color = '#007bff';
+                break;
+            default:
+                resetStatus.style.color = '#6c757d';
         }
         
-        // Handle data rows
-        const csvCells = cells.map((cell, cellIndex) => {
-            let cellText = cell.textContent.trim();
-            
-            // Use data-export-value if available (for amount columns)
-            if (cell.hasAttribute('data-export-value')) {
-                return cell.getAttribute('data-export-value');
+        // Clear status after 5 seconds for non-success messages
+        if (type !== 'success') {
+            setTimeout(() => {
+                resetStatus.textContent = '';
+            }, 5000);
+        }
+    }
+}
+
+// Add keyboard support for password reset
+function setupPasswordResetEventListeners() {
+    const resetEmailField = document.getElementById('resetEmail');
+    if (resetEmailField) {
+        resetEmailField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendPasswordReset();
             }
-            
-            // Handle amount columns (Credit Amount = column 3, Payment Amount = column 4 in new structure)
-            if (cellIndex === 3 || cellIndex === 4) {
-                if (cellText === '-') {
-                    return '0';
-                }
-                if (cellText.includes('₹')) {
-                    // Remove ₹ symbol, commas, and any text formatting
-                    let numericValue = cellText.replace(/₹|,|\*|\s/g, '');
-                    // Handle Total row special formatting
-                    if (cellText.includes('Total')) {
-                        numericValue = numericValue.replace(/Total/g, '');
-                    }
-                    return numericValue.trim();
-                }
-                return cellText;
-            }
-            
-            // For Total row, handle the "Total" text cell
-            if (cellText.includes('Total')) {
-                return 'Total';
-            }
-            
-            // Regular text cells - wrap in quotes if containing commas
-            if (cellText.includes(',') || cellText.includes('"') || cellText.includes('\n')) {
-                cellText = '"' + cellText.replace(/"/g, '""') + '"';
-            }
-            
-            return cellText;
         });
-        
-        // Insert hidden columns data
-        // Insert Treasury Challan No. after Tender No. (index 2)
-        const challanNo = row.getAttribute('data-challan-no') || '';
-        csvCells.splice(3, 0, challanNo);
-        
-        // Insert Type after Treasury Challan No. (index 3, now 4)
-        const typeData = row.getAttribute('data-type') || '';
-        csvCells.splice(4, 0, typeData);
-        
-        return csvCells.join(',');
-    }).join('\n');
+    }
 }
-
-// Utility functions
-function showAlert(message, type) {
-    // Create alert element
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type}`;
-    alert.textContent = message;
-    
-    // Insert at the beginning of the active tab
-    const activeTab = document.querySelector('.tab-content.active');
-    activeTab.insertBefore(alert, activeTab.firstChild);
-    
-    // Remove alert after 3 seconds
-    setTimeout(() => {
-        alert.remove();
-    }, 3000);
-}
-
-function refreshTables() {
-    refreshAgencyTable();
-    refreshRecordTables();
-}
-
-// Initialize application when page loads
-window.onload = function() {
-    init();
-};

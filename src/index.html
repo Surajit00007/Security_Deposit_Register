@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Deposit Register 🧾</title>
+    <title>Security Deposit Register ðŸ§¾</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Security Deposit Register 🧾</h1>
+            <h1>Security Deposit Register 🗃️</h1>
             <p>Comprehensive Management System</p>
             <div id="user-status" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
                 <span id="auth-status-header">Please login to access your data</span>
@@ -395,19 +395,19 @@
                     <h3>Report Summary</h3>
                     <div class="summary-grid">
                         <div class="summary-card">
-                            <div class="summary-value" id="opening-balance">₹0</div>
+                            <div class="summary-value" id="opening-balance">â‚¹0</div>
                             <div class="summary-label">Opening Balance</div>
                         </div>
                         <div class="summary-card">
-                            <div class="summary-value" id="total-credit">₹0</div>
+                            <div class="summary-value" id="total-credit">â‚¹0</div>
                             <div class="summary-label">Total Credit</div>
                         </div>
                         <div class="summary-card">
-                            <div class="summary-value" id="total-payment">₹0</div>
+                            <div class="summary-value" id="total-payment">â‚¹0</div>
                             <div class="summary-label">Total Payment</div>
                         </div>
                         <div class="summary-card">
-                            <div class="summary-value" id="closing-balance">₹0</div>
+                            <div class="summary-value" id="closing-balance">â‚¹0</div>
                             <div class="summary-label">Closing Balance</div>
                         </div>
                     </div>
@@ -429,14 +429,25 @@
   <h2>Register</h2>
   <input type="email" id="reg-email" placeholder="Email">
   <input type="password" id="reg-password" placeholder="Password">
-  <button id="register-btn">🚀 Register</button>
+  <button id="register-btn"> ✅ Register</button>
 
   <h2>Login</h2>
   <input type="email" id="login-email" placeholder="Email">
   <input type="password" id="login-password" placeholder="Password">
   <button id="login-btn">✅ Login</button>
 
-  <button id="logout-btn">👋 Logout</button>
+<!-- Password Reset Section -->
+<div id="forgot-password-container" style="margin-top: 15px; padding: 15px; border-top: 1px solid #e9ecef;">
+  <p style="margin: 0 0 10px 0; color: #6c757d; font-size: 0.9em;">Forgot your password?</p>
+  <div style="display: flex; gap: 10px; align-items: center;">
+    <input type="email" id="resetEmail" placeholder="Enter your email for password reset" style="flex: 1;" />
+    <button id="reset-btn" onclick="sendPasswordReset()" style="white-space: nowrap;">🔄 Send Reset Link</button>
+  </div>
+  <div id="reset-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+</div>
+
+<button id="logout-btn">👋 Logout</button>
+
 
   <p id="auth-status"></p>
 </div>
@@ -473,3 +484,5 @@
 
 </body>
 </html>
+
+

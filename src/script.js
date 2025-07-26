@@ -134,6 +134,9 @@ function init() {
     setupAuthEventListeners();
     populateYearDropdown();
     
+    // Initially disable tabs until user logs in
+    disableTabs();
+    
     // Check if user is already authenticated
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -146,10 +149,6 @@ function init() {
                 authStatus.innerText = `✅ Welcome, ${user.email}`;
             }
             
-            // ✅ Show Authenticated UI
-            document.getElementById("auth-container").style.display = "none";
-            document.getElementById("container").style.display = "block";
-            
             // Update header status
             const headerStatus = document.getElementById('auth-status-header');
             if (headerStatus) {
@@ -157,24 +156,36 @@ function init() {
                 headerStatus.style.color = '#28a745';
             }
             
+            // ✅ Enable tabs - make them clickable and functional
+            setTimeout(() => {
+                enableTabs();
+            }, 100);
+            
             // ✅ Load user data when authenticated with real-time sync
             loadUserDataFromFirestore(user.uid);
             
             // ✅ Load Firestore Realtime Data (handled by loadUserDataFromFirestore)
             // populateDropdowns() and refreshTables() are called in setupRealtimeListener
             
-            // ✅ Optionally show a default tab or section
+            // ✅ Show default tab (Agency Database)
             openTab(null, 'agency-database');
             
         } else {
-            // Show login/register UI
-            document.getElementById("auth-container").style.display = "block";
-            document.getElementById("container").style.display = "none";
-            
+            // Update auth status for logged out state
             const authStatus = document.getElementById("auth-status");
             if (authStatus) {
                 authStatus.innerText = "Please login to access your data.";
             }
+            
+            // Update header status
+            const headerStatus = document.getElementById('auth-status-header');
+            if (headerStatus) {
+                headerStatus.textContent = 'Please login to access your data';
+                headerStatus.style.color = '#6c757d';
+            }
+            
+            // ✅ Disable tabs - make them non-functional until login
+            disableTabs();
             
             // Clear data when not authenticated
             clearUserData();
@@ -373,6 +384,12 @@ function clearUserData() {
 
 // Tab management
 function openTab(event, tabName) {
+    // Check if user is authenticated before allowing tab switching
+    if (!currentUser) {
+        console.log('Tab switching blocked - user not authenticated');
+        return;
+    }
+    
     // Hide all tab contents
     const tabContents = document.querySelectorAll('.tab-content');
     tabContents.forEach(content => content.classList.remove('active'));
@@ -401,6 +418,31 @@ function openTab(event, tabName) {
     if (tabName === 'view-records') {
         refreshRecordTables();
     }
+}
+
+// Tab state management functions
+function enableTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        // Remove disabled class first
+        tab.classList.remove('disabled');
+        // Force enable with important styles
+        tab.style.setProperty('pointer-events', 'auto', 'important');
+        tab.style.setProperty('opacity', '1', 'important');
+        tab.style.setProperty('cursor', 'pointer', 'important');
+    });
+}
+
+function disableTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        // Add disabled class first
+        tab.classList.add('disabled');
+        // Force disable with important styles
+        tab.style.setProperty('pointer-events', 'none', 'important');
+        tab.style.setProperty('opacity', '0.5', 'important');
+        tab.style.setProperty('cursor', 'not-allowed', 'important');
+    });
 }
 
 // Data persistence with automatic refresh

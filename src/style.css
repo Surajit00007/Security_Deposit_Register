@@ -63,6 +63,20 @@ body {
     transform: translateY(-2px);
 }
 
+.tab.disabled {
+    background: #e9ecef !important;
+    color: #6c757d !important;
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    pointer-events: none !important;
+}
+
+.tab.disabled:hover {
+    background: #e9ecef !important;
+    color: #6c757d !important;
+    transform: none !important;
+}
+
 .tab-content {
     display: none;
     padding: 30px;

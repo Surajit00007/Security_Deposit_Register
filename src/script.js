@@ -137,17 +137,45 @@ function init() {
     // Check if user is already authenticated
     auth.onAuthStateChanged((user) => {
         if (user) {
-            document.getElementById("auth-status").innerText = `✅ Welcome, ${user.email}`;
+            // ✅ Show welcome message
+            showAlert(`✅ Welcome, ${user.email}`, 'success');
+            
+            // Show success message in auth status
+            const authStatus = document.getElementById("auth-status");
+            if (authStatus) {
+                authStatus.innerText = `✅ Welcome, ${user.email}`;
+            }
+            
+            // ✅ Show Authenticated UI
+            document.getElementById("auth-container").style.display = "none";
+            document.getElementById("container").style.display = "block";
+            
             // Update header status
             const headerStatus = document.getElementById('auth-status-header');
             if (headerStatus) {
                 headerStatus.textContent = `✅ Welcome, ${user.email}`;
                 headerStatus.style.color = '#28a745';
             }
-            // Load user data when authenticated with real-time sync
+            
+            // ✅ Load user data when authenticated with real-time sync
             loadUserDataFromFirestore(user.uid);
+            
+            // ✅ Load Firestore Realtime Data (handled by loadUserDataFromFirestore)
+            // populateDropdowns() and refreshTables() are called in setupRealtimeListener
+            
+            // ✅ Optionally show a default tab or section
+            openTab(null, 'agency-database');
+            
         } else {
-            document.getElementById("auth-status").innerText = "Please login to access your data.";
+            // Show login/register UI
+            document.getElementById("auth-container").style.display = "block";
+            document.getElementById("container").style.display = "none";
+            
+            const authStatus = document.getElementById("auth-status");
+            if (authStatus) {
+                authStatus.innerText = "Please login to access your data.";
+            }
+            
             // Clear data when not authenticated
             clearUserData();
         }

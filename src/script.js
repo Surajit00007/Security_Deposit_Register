@@ -1,8 +1,11 @@
 // Firebase is already initialized in index.html
 // Using global firebase, auth, db variables
 
+// Global variables for current user
+let currentUser = null;
+let userDataRef = null;
+
 // ===== AUTHENTICATION FUNCTIONS =====
-// Modern approach using addEventListener (no onclick needed)
 
 function registerUser() {
   const email = document.getElementById("reg-email").value.trim();
@@ -19,6 +22,8 @@ function registerUser() {
     .then((userCredential) => {
       updateAuthStatus(`🎉 Account created successfully! Welcome, ${userCredential.user.email}`, "success");
       clearAuthForms();
+      // Initialize user data in Firestore
+      initializeUserData(userCredential.user.uid);
     })
     .catch((error) => {
       updateAuthStatus(`❌ Registration failed: ${error.message}`, "error");
@@ -40,6 +45,8 @@ function loginUser() {
     .then((userCredential) => {
       updateAuthStatus(`✅ Welcome back, ${userCredential.user.email}!`, "success");
       clearAuthForms();
+      // Load user data from Firestore
+      loadUserDataFromFirestore(userCredential.user.uid);
     })
     .catch((error) => {
       updateAuthStatus(`❌ Sign in failed: ${error.message}`, "error");
@@ -51,6 +58,8 @@ function logoutUser() {
   
   auth.signOut().then(() => {
     updateAuthStatus("👋 You have been signed out successfully", "info");
+    // Clear local data
+    clearUserData();
   }).catch((error) => {
     updateAuthStatus(`❌ Sign out failed: ${error.message}`, "error");
   });
@@ -118,23 +127,140 @@ let editingPaymentId = null;
 
 // Initialize application
 function init() {
-    loadData();
-    populateDropdowns();
-    populateYearDropdown();
-    refreshTables();
     setupAuthEventListeners();
+    populateYearDropdown();
+    
+    // Check if user is already authenticated
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById("auth-status").innerText = `👋 Welcome, ${user.email}`;
+            // Update header status
+            const headerStatus = document.getElementById('auth-status-header');
+            if (headerStatus) {
+                headerStatus.textContent = `👋 Welcome, ${user.email}`;
+                headerStatus.style.color = '#28a745';
+            }
+            // Load user data when authenticated
+            loadUserDataFromFirestore(user.uid);
+        } else {
+            document.getElementById("auth-status").innerText = `Please login to access your data.`;
+            // Clear data when not authenticated
+            clearUserData();
+        }
+    });
 }
 
 
 
-// Monitor auth state
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    document.getElementById("auth-status").innerText = `👋 Welcome, ${user.email}`;
-  } else {
-    document.getElementById("auth-status").innerText = `Not logged in.`;
+// ===== FIRESTORE INTEGRATION FUNCTIONS =====
+
+// Initialize user data in Firestore for new users
+async function initializeUserData(userId) {
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      // Create initial user document
+      await db.collection('users').doc(userId).set({
+        agencies: [],
+        deposits: [],
+        payments: [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log('User data initialized in Firestore');
+    }
+    // Set up user data reference
+    currentUser = userId;
+    userDataRef = db.collection('users').doc(userId);
+    // Load user data
+    await loadUserDataFromFirestore(userId);
+  } catch (error) {
+    console.error('Error initializing user data:', error);
+    showAlert('Error initializing user data: ' + error.message, 'error');
   }
-});
+}
+
+// Load user data from Firestore
+async function loadUserDataFromFirestore(userId) {
+  try {
+    currentUser = userId;
+    userDataRef = db.collection('users').doc(userId);
+    
+    const userDoc = await userDataRef.get();
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      agencies = userData.agencies || [];
+      deposits = userData.deposits || [];
+      payments = userData.payments || [];
+      
+      // Refresh UI
+      populateDropdowns();
+      refreshTables();
+      console.log('User data loaded from Firestore');
+    } else {
+      // Initialize if document doesn't exist
+      await initializeUserData(userId);
+    }
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    if (error.code === 'permission-denied') {
+      showAlert('Permission denied. Please check your authentication.', 'error');
+    } else if (error.code === 'unavailable') {
+      showAlert('Network error. Please check your internet connection.', 'error');
+    } else {
+      showAlert('Error loading user data: ' + error.message, 'error');
+    }
+  }
+}
+
+// Save user data to Firestore
+async function saveUserDataToFirestore() {
+  if (!currentUser || !userDataRef) {
+    console.log('No user logged in, skipping Firestore save');
+    return;
+  }
+  
+  try {
+    await userDataRef.update({
+      agencies: agencies,
+      deposits: deposits,
+      payments: payments,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    console.log('User data saved to Firestore');
+  } catch (error) {
+    console.error('Error saving user data:', error);
+    if (error.code === 'permission-denied') {
+      showAlert('Permission denied. Please check your authentication.', 'error');
+    } else if (error.code === 'unavailable') {
+      showAlert('Network error. Please check your internet connection.', 'error');
+    } else {
+      showAlert('Error saving data: ' + error.message, 'error');
+    }
+  }
+}
+
+// Clear local user data on logout
+function clearUserData() {
+  currentUser = null;
+  userDataRef = null;
+  agencies = [];
+  deposits = [];
+  payments = [];
+  
+  // Clear UI
+  refreshTables();
+  populateDropdowns();
+  
+  // Update header status
+  const headerStatus = document.getElementById('auth-status-header');
+  if (headerStatus) {
+    headerStatus.textContent = 'Please login to access your data';
+    headerStatus.style.color = '#6c757d';
+  }
+}
+
+// Auth state monitoring is now handled in the init() function
 
 // Tab management
 function openTab(tabName) {
@@ -170,21 +296,18 @@ function openTab(tabName) {
 
 // Data persistence
 function saveData() {
-    const data = {
-        agencies: agencies,
-        deposits: deposits,
-        payments: payments
-    };
-    // In a real application, this would save to a database
-    console.log('Data saved:', data);
+    // Save to Firestore if user is logged in
+    if (currentUser) {
+        saveUserDataToFirestore();
+    } else {
+        console.log('No user logged in, data not saved to Firestore');
+    }
 }
 
 function loadData() {
-    // In a real application, this would load from a database
-    // For now, start with empty data
-    if (agencies.length === 0) {
-        agencies = [];
-    }
+    // Data is now loaded from Firestore in the auth state change handler
+    // This function is kept for compatibility but data loading is handled by Firestore
+    console.log('loadData called - data loading handled by Firestore integration');
 }
 
 // PAN formatting function
@@ -216,6 +339,12 @@ function formatPAN(input) {
 
 // Agency management
 function saveAgency() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to save agency data', 'error');
+        return;
+    }
+
     const pan = document.getElementById('agency-pan').value.trim().toUpperCase();
     const name = document.getElementById('agency-name').value.trim();
 
@@ -253,6 +382,12 @@ function saveAgency() {
 }
 
 function editAgency(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to edit agency data', 'error');
+        return;
+    }
+
     const agency = agencies.find(a => a.id === id);
     if (agency) {
         document.getElementById('agency-pan').value = agency.pan;
@@ -266,6 +401,12 @@ function editAgency(id) {
 }
 
 function deleteAgency(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to delete agency data', 'error');
+        return;
+    }
+
     if (confirm('Are you sure you want to delete this agency?')) {
         agencies = agencies.filter(a => a.id !== id);
         saveData();
@@ -438,6 +579,12 @@ function toggleWorkCompletionFields() {
 }
 
 function saveDeposit() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to save deposit data', 'error');
+        return;
+    }
+
     const pan = document.getElementById('deposit-pan').value;
     const agencyName = document.getElementById('deposit-agency-name').value;
     const tenderNo = document.getElementById('deposit-tender-no').value;
@@ -715,6 +862,12 @@ function calculateTotalPayment() {
 }
 
 function savePayment() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to save payment data', 'error');
+        return;
+    }
+
     const pan = document.getElementById('payment-pan').value;
     const agencyName = document.getElementById('payment-agency-name').value;
     const tenderNo = document.getElementById('payment-tender-no').value;
@@ -921,6 +1074,12 @@ function searchPayments() {
 }
 
 function editDeposit(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to edit deposit data', 'error');
+        return;
+    }
+
     const deposit = deposits.find(d => d.id === id);
     if (!deposit) {
         showAlert('Deposit not found', 'error');
@@ -979,6 +1138,12 @@ function editDeposit(id) {
 }
 
 function deleteDeposit(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to delete deposit data', 'error');
+        return;
+    }
+
     if (confirm('Are you sure you want to delete this deposit?')) {
         deposits = deposits.filter(d => d.id !== id);
         saveData();
@@ -988,6 +1153,12 @@ function deleteDeposit(id) {
 }
 
 function editPayment(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to edit payment data', 'error');
+        return;
+    }
+
     const payment = payments.find(p => p.id === id);
     if (!payment) {
         showAlert('Payment not found', 'error');
@@ -1059,6 +1230,12 @@ function editPayment(id) {
 }
 
 function deletePayment(id) {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to delete payment data', 'error');
+        return;
+    }
+
     if (confirm('Are you sure you want to delete this payment?')) {
         payments = payments.filter(p => p.id !== id);
         saveData();
@@ -1069,12 +1246,24 @@ function deletePayment(id) {
 
 // Export functions
 function exportDeposits() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to export data', 'error');
+        return;
+    }
+
     const csv = generateDepositCSV();
     downloadCSV(csv, 'deposits.csv');
     showAlert('Deposits exported successfully', 'success');
 }
 
 function exportPayments() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to export data', 'error');
+        return;
+    }
+
     const csv = generatePaymentCSV();
     downloadCSV(csv, 'payments.csv');
     showAlert('Payments exported successfully', 'success');
@@ -1162,6 +1351,12 @@ function toggleReportFields() {
 }
 
 function generateReport() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to generate reports', 'error');
+        return;
+    }
+
     const reportType = document.getElementById('report-type').value;
     const selectedAgency = document.getElementById('report-agency').value;
     const year = document.getElementById('report-year').value;
@@ -1360,6 +1555,12 @@ function generateDetailedReport(filteredDeposits, filteredPayments) {
 }
 
 function exportReport() {
+    // Check if user is authenticated
+    if (!currentUser) {
+        showAlert('Please login to export reports', 'error');
+        return;
+    }
+
     const table = document.getElementById('report-table');
     const csv = tableToCSV(table);
     const filename = `Security_Deposit_Report_${new Date().toISOString().split('T')[0]}.csv`;
